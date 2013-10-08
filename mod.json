@@ -3,7 +3,7 @@
 	"homepage": "https://github.com/mohlemeyer/a-mailer",
 	"author": "Matthias Ohlemeyer <mohlemeyer@gmail.com>",
 	"licenses": ["MIT"],
-	"keywords": ["email","email client","mail","SMTP"],
+	"keywords": ["email client","email","mail","SMTP"],
 	"main": "jslibs/a-mailer/starter.js",
 	"includes":"mohlemeyer~vertxQunitSinon~0.0.2"
 }
