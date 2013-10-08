@@ -1,4 +1,9 @@
 {
+	"description": "Asynchronous SMTP mailer",
+	"homepage": "https://github.com/mohlemeyer/a-mailer",
+	"author": "Matthias Ohlemeyer <mohlemeyer@gmail.com>",
+	"licenses": ["MIT"],
+	"keywords": ["email", "email client","mail","SMTP"],
 	"main": "jslibs/a-mailer/starter.js",
 	"includes":"mohlemeyer~vertxQunitSinon~0.0.2"
 }
