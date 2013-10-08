@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>jslibs Source: a-mailer.js</title>
+
+	<!--[if lt IE 9]>
+	<script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+	<![endif]-->
+	<link type="text/css" rel="stylesheet" href="styles/sunlight.default.css">
+
+	
+	<link type="text/css" rel="stylesheet" href="styles/site.cerulean.css">
+	
+</head>
+
+<body>
+<div class="container-fluid">
+	<div class="navbar navbar-fixed-top navbar-inverse">
+		<div class="navbar-inner">
+			<a class="brand" href="index.html">jslibs</a>
+			<ul class="nav">
+				
+				<li class="dropdown">
+					<a href="modules.list.html" class="dropdown-toggle" data-toggle="dropdown">Modules<b
+						class="caret"></b></a>
+
+					<ul class="dropdown-menu ">
+						
+						<li>
+							<a href="a-mailer.html">jslibs/a-mailer/lib/a-mailer</a>
+						</li>
+						
+						<li>
+							<a href="client.html">jslibs/a-mailer/lib/client</a>
+						</li>
+						
+
+					</ul>
+				</li>
+				
+				<li class="dropdown">
+					<a href="classes.list.html" class="dropdown-toggle" data-toggle="dropdown">Classes<b
+						class="caret"></b></a>
+
+					<ul class="dropdown-menu ">
+						
+						<li>
+							<a href="client-SMTPClient.html">SMTPClient</a>
+						</li>
+						
+
+					</ul>
+				</li>
+				
+			</ul>
+		</div>
+	</div>
+
+	<div class="row-fluid">
+
+		
+			<div class="span12">
+				
+				<div id="main">
+					
+
+
+		<h1 class="page-title">Source: a-mailer.js</h1>
+    
+    <section>
+        <article>
+            <pre class="sunlight-highlight-javascript linenums">/**
+ * An easy to use module to send email messages via SMTP asynchronously.&lt;br>
+ * &lt;br>
+ * This module can be used in two modes:
+ * &lt;ul>
+ * &lt;li>As a &lt;b>CommonJS module&lt;/b>: Include this module as a resource in your
+ * Vert.x project by specifying
+ * &lt;code>var a_mailer = require('jslibs/a-mailer/lib/a-mailer');&lt;/code>
+ * in your JavaScript file.&lt;/li>
+ * &lt;li>As a &lt;b>runnable Vert.x module&lt;/b>: Deploy as a Vert.x module and send
+ * your email messages on the event bus.&lt;/li>
+ * &lt;/ul>
+ * In both cases the module needs some configuration to work properly:
+ * &lt;ul>
+ * &lt;li>&lt;code>address&lt;/code> Event bus address on which the module is listening
+ * for send requests. Only required when the module is used as a runnable
+ * Vert.x module.&lt;/li>
+ * &lt;li>&lt;code>host&lt;/code> {string} SMTP server host&lt;/li>
+ * &lt;li>&lt;code>port&lt;/code> {integer} SMTP server port&lt;/li>
+ * &lt;li>&lt;code>ssl&lt;/code> {boolean} If set to &lt;code>true&lt;/code> uses an encrypted
+ * connection to the server right from the start. Often combined with
+ * &lt;code>port&lt;/code> set to 465, e.g. in the case of Gmail. Default is
+ * &lt;code>false&lt;/code>.&lt;/li>
+ * &lt;li>&lt;code>auth&lt;/code> {boolean} Set to &lt;code>true&lt;/code> if the server
+ * requires authentication. Default is &lt;code>false&lt;/code>.&lt;/li>
+ * &lt;li>&lt;code>username&lt;/code> {string} Authentication user.&lt;/li>
+ * &lt;li>&lt;code>password&lt;/code> {string} Authentication password.&lt;/li>
+ * &lt;li>&lt;code>content_type&lt;/code> {string} Default MIME type/subtype for the
+ * email body; can be set to &lt;code>text/html&lt;/code>. Every other or no value
+ * will be interpreted as &lt;code>text/plain&lt;/code>.&lt;/li>
+ * &lt;/ul>
+ * &lt;b>NOTE on character encoding&lt;/b>&lt;br>
+ * The email subject and body will always be encoded using UTF-8. If you use
+ * the module from JavaScript as a CommonJS module and include non-US
+ * characters, make sure to encode the source code file in UTF-8, too.
+ * Otherwise your email content might get mangled.
+ * 
+ * @module jslibs/a-mailer/lib/a-mailer
+ * @author Matthias Ohlemeyer (mohlemeyer@gmail.com)
+ * @license MIT
+ *
+ * Copyright (c) 2013 Matthias Ohlemeyer
+ */
+
+var vertx = require('vertx');
+var container = require('vertx/container');
+var getSmtpClient = require('jslibs/a-mailer/lib/client');
+
+//Required java classes/packages
+var MimeMessage = Packages.javax.mail.internet.MimeMessage;
+var MailSession = Packages.javax.mail.Session;
+var System = Packages.java.lang.System;
+var InternetAddress = Packages.javax.mail.internet.InternetAddress;
+var RecipientType = Packages.javax.mail.Message.RecipientType;
+var ByteArrayOutputStream = Packages.java.io.ByteArrayOutputStream;
+var javaDate = Packages.java.util.Date;
+
+//Set up mailer configuration
+var moduleThis = this;
+
+/**
+ * Configure the module&lt;br>
+ * &lt;br>
+ * This method will be called, when the module is used as a CommonJS module.
+ * When used as Vert.x module it is called internally with the
+ * configuration data from &lt;code>mod.json&lt;/code>.&lt;br>
+ * &lt;br>
+ * &lt;b>NOTE:&lt;/b> A call to &lt;code>configure&lt;/code> affects all subsequent email
+ * sending actions. The A-Mailer module is not well suited to setting up
+ * different mailing hosts and using them in a single application since
+ * configuration is done on module basis! 
+ * 
+ * @param {object} config The configuration object. Might contain zero or more
+ * of the configuration properties mentioned in the module description:
+ * &lt;code>host&lt;/code>, &lt;code>port&lt;/code>...
+ */
+exports.configure = function (config) {
+	moduleThis.ebAddress = config.address;
+	moduleThis.host = config.host || 'localhost';
+	moduleThis.port = config.port || 25;
+	moduleThis.ssl = config.ssl || false;
+	moduleThis.auth = config.auth || false;
+	moduleThis.username = moduleThis.auth ? config.username : '';
+	moduleThis.password = moduleThis.auth ? config.password : '';
+	moduleThis.textContentSubtype =
+		config.content_type === 'text/html' ? 'html' : 'plain';
+}; // END: configure()
+
+exports.configure(container.config);
+
+// Only used to inject a client getter stub to support unit testing!
+exports.setClientGetter = function (clientGetter) {
+	getSmtpClient = clientGetter;
+};
+
+/**
+ * Send an email.
+ * 
+ * @param {object} sendData Send data object
+ * @param {string} sendData.from Sender email address
+ * @param {string|array} sendData.to Single "TO" Recipient email address as a
+ * string or an array of addresses
+ * @param {string|array} [sendData.cc] Single "CC" Recipient email address as a
+ * string or an array of addresses
+ * @param {string|array} [sendData.bcc] Single "BCC" Recipient email address as
+ * a string or an array of addresses
+ * @param {string} sendData.subject Email subject
+ * @param {string} [sendData.body=''] Email body
+ * @param {string} [sendData.content_type] MIME type for this send request;
+ * either &lt;code>text/plain&lt;/code> or &lt;code>text/html&lt;/code>. If otherwise
+ * specified or not specified at all the configured MIME type for the module
+ * will be used as the default value.
+ * @param {function} [callback] Callback function; called after the email is
+ * sent or when an error occurs. The first argument is either an error object
+ * or null if everything went ok. In case of success the second argument is
+ * a result object with up to two properties:
+ * &lt;ul>
+ * &lt;li>&lt;code>response&lt;/code> The server's response message.&lt;/li>
+ * &lt;li>&lt;code>rcptFailedAdrs&lt;/code> Array of email addresses, which were rejected
+ * by the server.&lt;/li>
+ * &lt;/ul>
+ */
+exports.send = function (sendData, callback) {
+	var smtpClient;			// Underlying SMTP client
+	var mailOpts;			// Mail client options
+	var fromAddr;			// "from" address as a Java object
+	var toAddrs;			// Array of "to" addresses as Java objects
+	var ccAddrs;			// Array of "cc" addresses as Java objects
+	var bccAddrs;			// Array of "bcc" addresses as Java objects
+	var sendError;			// Error in the course of the send method
+	var sendResult;			// Result of send operation
+	var sendContentSubtype;	// MIME subtype for this send request
+	
+	
+	// ===========
+	// Initialize
+	// ===========
+	
+	// Should be allowed to be called without callback
+	callback = callback || function () {};
+	sendError = null;
+	sendResult = {};
+	sendContentSubtype = textContentSubtype;
+	if (sendData.content_type === 'text/html') {
+		sendContentSubtype = 'html';
+	} else if (sendData.content_type === 'text/plain') {
+		sendContentSubtype = 'plain';
+	}
+	
+	// ================
+	// Check arguments
+	// ================
+	if (!sendData) {
+		callback(new Error('a-mailer.send: Missing send data'));
+		return;
+	}
+	if (!sendData.from) {
+		callback(new Error('a-mailer.send: Missing "from" field'));
+		return;
+	}
+	if (!sendData.to) {
+		callback(new Error('a-mailer.send: Missing "to" field'));
+		return;
+	}
+	if (!sendData.subject) {
+		callback(new Error('a-mailer.send: Missing "subject" field'));
+		return;
+	}
+
+	// ============================
+	// Check sender and recipients
+	// ============================
+	
+	/*
+	 * Parses a string or an array of strings into an array of Java
+	 * email addresses (javax.mail.internet.InternetAddress).
+	 */
+	function parseAddresses (addrs) {
+		var i, l;	// Loop vars
+		var iAddrs;	// Array of Java internet addresses
+		
+		if (typeof addrs === 'string') {
+			// In case of a string, we expect a single address
+			return [InternetAddress.parse(addrs)[0]];
+		} else {
+			// Must be an array with potentially many address strings,
+			// each representing a single address
+			iAddrs = [];
+			for (i = 0, l = addrs.length; i &lt; l; i++) {
+				iAddrs.push(InternetAddress.parse(addrs[i])[0]);
+			}
+			return iAddrs;
+		}
+	} // END: parseAddresses()
+	
+	try {
+		fromAddr = InternetAddress.parse(sendData.from)[0];
+	} catch (parseErr) {
+		callback(new Error('a-mailer.send: Illegal "from" address: ' +
+				parseErr.toString()));
+		return;
+	}
+	try {
+		toAddrs = parseAddresses(sendData.to);
+		if (toAddrs.length === 0) {
+			throw new Error('Missing "to" address');
+		}
+	} catch (parseErr) {
+		callback(new Error('a-mailer.send: Illegal "to" address: ' +
+				parseErr.toString()));
+		return;		
+	}
+	try {
+		ccAddrs = parseAddresses(sendData.cc || []);
+	} catch (parseErr) {
+		callback(new Error('a-mailer.send: Illegal "cc" address: ' +
+				parseErr.toString()));
+		return;		
+	}
+	try {
+		bccAddrs = parseAddresses(sendData.bcc || []);
+	} catch (parseErr) {
+		callback(new Error('a-mailer.send: Illegal "bcc" address: ' +
+				parseErr.toString()));
+		return;		
+	}
+	
+	// ===================
+	// Set up mail client
+	// ===================
+	mailOpts = {
+			ignoreTLS: true
+	};
+	if (auth) {
+		mailOpts.auth = {};
+		mailOpts.auth.user = username;
+		mailOpts.auth.pass = password;
+	}
+	if (ssl) {
+		mailOpts.secureConnection = true;
+	}
+	smtpClient = getSmtpClient(port, host, mailOpts);
+
+	// =======================
+	// Set exception handlers
+	// =======================
+
+	// Calls the send callback with the error, which has a "toString" method
+	// and optionally the properties "name", "data", "code".
+	smtpClient.on('error', function(err){
+		// "close" triggers the "end" handler
+		sendError = err;
+		smtpClient.close();
+	});
+
+	smtpClient.on('rcptFailed', function(failedAddresses){
+		sendResult.rcptFailedAdrs = failedAddresses;
+	});
+
+	// ==========================
+	// Set control flow handlers
+	// ==========================
+	smtpClient.once('idle', function () {
+		var i, l;				// Loop vars
+		var envelopeToAddrs;	// Array of "to" addresses for the envelope
+		
+		envelopeToAddrs = [];
+		for (i = 0, l = toAddrs.length; i &lt; l; i++) {
+			envelopeToAddrs.push(toAddrs[i].getAddress());
+		}
+		for (i = 0, l = ccAddrs.length; i &lt; l; i++) {
+			envelopeToAddrs.push(ccAddrs[i].getAddress());
+		}
+		for (i = 0, l = bccAddrs.length; i &lt; l; i++) {
+			envelopeToAddrs.push(bccAddrs[i].getAddress());
+		}
+		
+		smtpClient.useEnvelope({
+			from: fromAddr.getAddress(),
+			to: envelopeToAddrs
+		});
+	});
+
+	smtpClient.on('message', function () {
+		var message;	// The complete message: Header and body
+		var msgBao;		// Intermediate ByteArrayOutputStream for the message
+		
+		try {
+			message = new MimeMessage(MailSession.getInstance(System.getProperties()));
+			message.setFrom(fromAddr);
+			message.setRecipients(RecipientType.TO, toAddrs);
+			if (ccAddrs.length > 0) {
+				message.setRecipients(RecipientType.CC, ccAddrs);
+			}
+			if (bccAddrs.length > 0) {
+				message.setRecipients(RecipientType.BCC, bccAddrs);
+			}
+			message.setSubject(sendData.subject, 'utf-8');
+			message.setText(sendData.body || '', 'utf-8', sendContentSubtype); // TODO: Document usage of text-encoding utf-8!
+			message.setSentDate(new javaDate());
+			msgBao = new ByteArrayOutputStream();
+			message.writeTo(msgBao);
+			smtpClient.end(new vertx.Buffer(msgBao.toByteArray()));
+		} catch (msgError) {
+			sendError = msgError;
+			smtpClient.close();
+		}
+	});
+
+	smtpClient.on('ready', function (success, response) {
+		if (!success) {
+			sendError = new Error(response);
+		}
+		sendResult.response = response;
+
+		// "quit" triggers the "end" handler
+		smtpClient.quit();
+	});
+	
+	smtpClient.on('end', function () {
+		callback(sendError, sendResult);
+	});
+}; 
+
+// TODO: Connect to event bus
+// TODO: Handle the case when not event bus address is specified in the configuration:
+// Only when used as a vertx module, not when used as a CommonJS module</pre>
+        </article>
+    </section>
+
+
+
+
+
+				</div>
+
+				<div class="clearfix"></div>
+				<footer>
+					
+					
+		<span class="jsdoc-message">
+		Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.2.0-dev</a>
+		on Sat Oct 05 2013 18:55:46 GMT+0200 (MESZ) using the <a href="https://github.com/terryweiss/docstrap">DocStrap template</a>.
+		</span>
+				</footer>
+			</div>
+
+			
+			<br clear="both">
+		</div>
+
+	</div>
+	<script src="scripts/sunlight.js"></script>
+	<script src="scripts/sunlight.javascript.js"></script>
+	<script src="scripts/sunlight-plugin.doclinks.js"></script>
+	<script src="scripts/sunlight-plugin.linenumbers.js"></script>
+	<script src="scripts/sunlight-plugin.menu.js"></script>
+	<script src="scripts/jquery.min.js"></script>
+	<script src="scripts/jquery.scrollTo.js"></script>
+	<script src="scripts/jquery.localScroll.js"></script>
+	<script src="scripts/bootstrap-dropdown.js"></script>
+	<script src="scripts/toc.js"></script>
+
+
+	<script>  Sunlight.highlightAll({lineNumbers:true,  showMenu: true, enableDoclinks :true}); </script>
+
+	<script>
+		$( function () {
+			$( "#toc" ).toc( {
+				selectors   : "h1,h2,h3,h4",
+				showAndHide : false,
+				scrollTo    : 60
+			} );
+			$( "#toc>ul" ).addClass( "nav nav-pills nav-stacked" );
+			$( "#main span[id^='toc']" ).addClass( "toc-shim" );
+
+		} );
+	</script>
+
+	
+
+</body>
+</html>

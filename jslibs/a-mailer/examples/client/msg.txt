@@ -1,0 +1,5 @@
+From: From Name <x@y.com>
+To: To Name <y@x.com>
+Subject: Mail Subject (FILE)
+
+This is the message content (FILE).
