@@ -408,36 +408,38 @@ QUnit.module('a-mailer.a-mailer', {
 		
 	}
 });
-test('should have a "send" method', 1, function () {
-	equal(typeof a_mailer.send, 'function', '"send" exists');
+test('should have a "getMailer" method', 1, function () {
+	equal(typeof a_mailer.getMailer, 'function', '"getMailer" exists');
 });
 test('"send" should call callback with error on missing mandatory arguments', function () {
+    var mailer = a_mailer.getMailer();
 	var callback = sinon.spy();
-	
-	a_mailer.send(undefined, callback);
+
+	mailer.send(undefined, callback);
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on missing "send data"');
 
 	callback.reset();
-	a_mailer.send({}, callback);
+	mailer.send({}, callback);
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on missing "from"');
 
 	callback.reset();
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com'
 	}, callback);
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on missing "to"');
 	
 	callback.reset();
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com'
 	}, callback);
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on missing "subject"');
 });
 test('"send" should call callback with error on illegal "from" address', function () {
+    var mailer = a_mailer.getMailer();
 	var callback = sinon.spy();
 	
-	a_mailer.send({
+	mailer.send({
 		from: 'a b',
 		to: 'bde@e.com',
 		subject: 'Subject',
@@ -447,9 +449,10 @@ test('"send" should call callback with error on illegal "from" address', functio
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on illegal "from" data');
 });
 test('"send" should call callback with error on illegal "to" address', function () {
+    var mailer = a_mailer.getMailer();
 	var callback = sinon.spy();
 	
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com',
 		to: 'c d',
 		subject: 'Subject',
@@ -459,9 +462,10 @@ test('"send" should call callback with error on illegal "to" address', function 
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on illegal "to" data');
 });
 test('"send" should call callback with error on one illegal "to" address of many', function () {
+    var mailer = a_mailer.getMailer();
 	var callback = sinon.spy();
 	
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com',
 		to: ['hij@klm.com', 'c d', 'zyx@xyz.de'],
 		subject: 'Subject',
@@ -471,9 +475,10 @@ test('"send" should call callback with error on one illegal "to" address of many
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on illegal "to" data');
 });
 test('"send" should call callback with error with zero legal "to" addresses', function () {
+    var mailer = a_mailer.getMailer();
 	var callback = sinon.spy();
 	
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com',
 		to: [],
 		subject: 'Subject',
@@ -483,9 +488,10 @@ test('"send" should call callback with error with zero legal "to" addresses', fu
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error with zero legal "to" addresses');
 });
 test('"send" should call callback with error on illegal "cc" address', function () {
+    var mailer = a_mailer.getMailer();
 	var callback = sinon.spy();
 	
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com',
 		to: 'uvw@xy.de',
 		cc: 'c d',
@@ -496,9 +502,10 @@ test('"send" should call callback with error on illegal "cc" address', function 
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on illegal "cc" data');
 });
 test('"send" should call callback with error on one illegal "cc" address of many', function () {
+    var mailer = a_mailer.getMailer();
 	var callback = sinon.spy();
 	
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com',
 		to: 'uvw@xy.de',
 		cc: ['hij@klm.com', 'c d', 'zyx@xyz.de'],
@@ -509,9 +516,10 @@ test('"send" should call callback with error on one illegal "cc" address of many
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on illegal "cc" data');
 });
 test('"send" should call callback with error on illegal "bcc" address', function () {
+    var mailer = a_mailer.getMailer();
 	var callback = sinon.spy();
 	
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com',
 		to: 'uvw@xy.de',
 		bcc: 'c d',
@@ -522,9 +530,10 @@ test('"send" should call callback with error on illegal "bcc" address', function
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on illegal "bcc" data');
 });
 test('"send" should call callback with error on one illegal "bcc" address of many', function () {
+    var mailer = a_mailer.getMailer();
 	var callback = sinon.spy();
 	
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com',
 		to: 'uvw@xy.de',
 		bcc: ['hij@klm.com', 'c d', 'zyx@xyz.de'],
@@ -535,8 +544,10 @@ test('"send" should call callback with error on one illegal "bcc" address of man
 	ok(callback.lastCall.args[0] instanceof Error, '"send" callback with error on illegal "bcc" data');
 });
 test('should call method to get a new SMTP client', function () {
+    var mailer = a_mailer.getMailer();
+    
 	ok(!this.fakeGetSmtpClient.called, 'getSmtpClient initially not called');
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'Subject',
@@ -548,7 +559,9 @@ test('should call method to get a new SMTP client', function () {
 	equal(this.fakeGetSmtpClient.firstCall.args[2].ignoreTLS, true, 'Called with "ignoreTLS"');
 });
 test('should set error handler on smtp client', function () {
-	a_mailer.send({
+    var mailer = a_mailer.getMailer();
+    
+    mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'Subject',
@@ -560,9 +573,10 @@ test('should set error handler on smtp client', function () {
 	equal(typeof this.fakeSmtpClient.on.firstCall.args[1], 'function', '"error" handler set');
 });
 test('error handler should close the smtp client', function () {
+    var mailer = a_mailer.getMailer();
 	var sendCallback = sinon.spy();
 	
-	a_mailer.send({
+	mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'Subject',
@@ -574,7 +588,9 @@ test('error handler should close the smtp client', function () {
 	ok(this.fakeSmtpClient.close.calledOnce, 'smtp client closed by error handler');
 });
 test('should set "receipt failed" handler on smtp client', function () {
-	a_mailer.send({
+    var mailer = a_mailer.getMailer();
+    
+    mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'Subject',
@@ -585,7 +601,9 @@ test('should set "receipt failed" handler on smtp client', function () {
 	equal(typeof this.fakeSmtpClient.on.secondCall.args[1], 'function', '"rcptFailed" handler set');
 });
 test('should set "idle" handler once', function () {
-	a_mailer.send({
+    var mailer = a_mailer.getMailer();
+    
+    mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'Subject',
@@ -596,7 +614,9 @@ test('should set "idle" handler once', function () {
 	equal(typeof this.fakeSmtpClient.once.firstCall.args[1], 'function', '"idle" handler set');
 });
 test('"idle" handler should call "useEnvelope" with "from" and "to"', function () {
-	a_mailer.send({
+    var mailer = a_mailer.getMailer();
+    
+    mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'Subject',
@@ -611,7 +631,9 @@ test('"idle" handler should call "useEnvelope" with "from" and "to"', function (
 			'"useEnvelope" called with "from" and "to"');
 });
 test('"idle" handler should call "useEnvelope" with "from", "to", "cc" and "bcc"', function () {
-	a_mailer.send({
+    var mailer = a_mailer.getMailer();
+    
+    mailer.send({
 		from: 'abc@d.com',
 		to: ['to1@zzz.com', 'To Two <to2@zzz.com>', 'Name of to three <to3@zzz.com>'],
 		cc: 'C and C <cc1@zzz.com>',
@@ -630,7 +652,9 @@ test('"idle" handler should call "useEnvelope" with "from", "to", "cc" and "bcc"
 			'"useEnvelope" called with "from", "to", "cc" and "bcc"');
 });
 test('should set "message" handler', function () {
-	a_mailer.send({
+    var mailer = a_mailer.getMailer();
+    
+    mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'Subject',
@@ -641,7 +665,9 @@ test('should set "message" handler', function () {
 	equal(typeof this.fakeSmtpClient.on.thirdCall.args[1], 'function', '"message" handler set');
 });
 test('"message" handler should call "end" with arguments', function () {
-	a_mailer.send({
+    var mailer = a_mailer.getMailer();
+    
+    mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'SubjectText',
@@ -661,7 +687,9 @@ test('"message" handler should call "end" with arguments', function () {
 	ok(/bodytext/.test(endArg), 'Contains correct "body" line');
 });
 test('should set "ready" handler', function () {
-	a_mailer.send({
+    var mailer = a_mailer.getMailer();
+    
+    mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'Subject',
@@ -672,7 +700,9 @@ test('should set "ready" handler', function () {
 	equal(typeof this.fakeSmtpClient.on.getCall(3).args[1], 'function', '"ready" handler set');
 });
 test('"ready" handler should call "quit"', function () {
-	a_mailer.send({
+    var mailer = a_mailer.getMailer();
+    
+    mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'Subject',
@@ -685,7 +715,9 @@ test('"ready" handler should call "quit"', function () {
 	ok(this.fakeSmtpClient.quit.calledOnce, '"quit" called by "ready" handler');
 });
 test('should set "end" handler', function () {
-	a_mailer.send({
+    var mailer = a_mailer.getMailer();
+    
+    mailer.send({
 		from: 'abc@d.com',
 		to: 'bde@e.com',
 		subject: 'Subject',

@@ -11,12 +11,12 @@
  */
 var console = require('vertx/console');
 var container = require('vertx/container');
-var mailer = require('jslibs/a-mailer/lib/a-mailer');
+var aMailer = require('jslibs/a-mailer/lib/a-mailer');
 
-mailer.configure({
+var mailer = aMailer.getMailer({
     host: 'your_mail_host',
     port: 'mail_host_port'
-        // and maybe more cofiguration options. See docs.
+        // and maybe more configuration options. See docs.
 });
 
 var email = {

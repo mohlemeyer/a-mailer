@@ -108,14 +108,14 @@ order for this to work you have to include A-Mailer as a resource in the
 "calling" script, `require` A-Mailer by
 
 ```javascript
-var mailer = require('jslibs/a-mailer/lib/a-mailer');
+var aMailer = require('jslibs/a-mailer/lib/a-mailer');
 ```
-
-Note that now you have to configure the module in your code before using it by
-calling
+To retrieve a new mailer call the module's `getMailer` method, passing
+in the required configuration data. You can have multiple mailer objects with
+different host configurations in your application.
 
 ```javascript
-mailer.configure({
+var mailer = aMailer.getMailer({
     host: <mail host {string}, optional; default is 'localhost'>,
     port: <port {integer}, optional; default is 25>
     ssl: <ssl/tls indicator {boolean}; set to tru to use an encrypted connection; default is false>
@@ -126,9 +126,7 @@ mailer.configure({
 });
 ```
 
-Do not configure an event bus address in this case!
-
-Mail can then be sent by calling the `send` method:
+Mail can then be sent by calling the `send` method of the mailer object:
 
 ```javascript
 function replyHandler (err, reply) {

@@ -1,5 +1,6 @@
 /*jslint sloppy:true, white:true, vars:true, plusplus: true, unparam: true */
-/*global require, Packages, exports, textContentSubtype, auth, username, password, ssl, port, host, ebAddress */
+/*global require, Packages, exports, textContentSubtype, auth, username,
+password, ssl, port, host, send */
 
 /**
  * An easy to use module to send email messages via SMTP asynchronously.<br>
@@ -13,11 +14,12 @@
  * <li>As a <b>runnable Vert.x module</b>: Deploy as a Vert.x module and send
  * your email messages on the event bus.</li>
  * </ul>
- * In both cases the module needs some configuration to work properly:
+ * In both cases the module or a mailer object retrieved by the
+ * <code>getMailer</code> method needs some configuration to work properly:
  * <ul>
- * <li><code>address</code> Event bus address on which the module is listening
- * for send requests. Only required when the module is used as a runnable
- * Vert.x module.</li>
+ * <li><code>address</code> {string} Event bus address on which the module is
+ * listening for send requests. Only required when the module is used as a
+ * runnable Vert.x module.</li>
  * <li><code>host</code> {string} SMTP server host</li>
  * <li><code>port</code> {integer} SMTP server port</li>
  * <li><code>ssl</code> {boolean} If set to <code>true</code> uses an encrypted
@@ -32,11 +34,12 @@
  * email body; can be set to <code>text/html</code>. Every other or no value
  * will be interpreted as <code>text/plain</code>.</li>
  * </ul>
+ * 
  * <b>NOTE on character encoding</b><br>
  * The email subject and body will always be encoded using UTF-8. If you use
- * the module from JavaScript as a CommonJS module and include non-US
- * characters, make sure to encode the source code file in UTF-8, too.
- * Otherwise your email content might get mangled.
+ * the module from JavaScript and include non-US characters, make sure to
+ * encode the source code file in UTF-8, too. Otherwise your email content
+ * might get mangled.
  * 
  * @module jslibs/a-mailer/lib/a-mailer
  * @author Matthias Ohlemeyer (mohlemeyer@gmail.com)
@@ -58,46 +61,55 @@ var RecipientType = Packages.javax.mail.Message.RecipientType;
 var ByteArrayOutputStream = Packages.java.io.ByteArrayOutputStream;
 var JavaDate = Packages.java.util.Date;
 
-//Set up mailer configuration
-var moduleThis = this;
-
-/**
- * Configure the module<br>
- * <br>
- * This method will be called, when the module is used as a CommonJS module.
- * When used as Vert.x module it is called internally with the
- * configuration data from <code>mod.json</code>.<br>
- * <br>
- * <b>NOTE:</b> A call to <code>configure</code> affects all subsequent email
- * sending actions. The A-Mailer module is not well suited to setting up
- * different mailing hosts and using them in a single application since
- * configuration is done on module basis! 
- * 
- * @param {object} config The configuration object. Might contain zero or more
- * of the configuration properties mentioned in the module description:
- * <code>host</code>, <code>port</code>...
+/*
+ * Only used to inject a client getter stub to support unit testing!
  */
-exports.configure = function (config) {
-    moduleThis.ebAddress = config.address;
-    moduleThis.host = config.host || 'localhost';
-    moduleThis.port = config.port || 25;
-    moduleThis.ssl = config.ssl || false;
-    moduleThis.auth = config.auth || false;
-    moduleThis.username = moduleThis.auth ? config.username : '';
-    moduleThis.password = moduleThis.auth ? config.password : '';
-    moduleThis.textContentSubtype =
-        config.content_type === 'text/html' ? 'html' : 'plain';
-}; // END: configure()
-
-exports.configure(container.config);
-
-//Only used to inject a client getter stub to support unit testing!
 exports.setClientGetter = function (clientGetter) {
     getSmtpClient = clientGetter;
 };
 
 /**
- * Send an email.
+ * Retrieve a new mailer object<br>
+ * <br>
+ * Returns an individually configured (host and authentication data) mailer
+ * object, with method(s) to send email messages.<br>
+ * Currently the object has a single <code>send</code> method (see the
+ * documentation for the inner <code>send</code> method of this module; it is
+ * attached to the retrieved mailer object).
+ * 
+ * @param {object} configData Configuration data as mentioned in the module
+ * description, except for the <code>address</code> property.
+ * @returns {object} A new mailer object.
+ */
+exports.getMailer = function (configData) {
+        var mailer; // The new mailer object
+        
+        if (!configData) {
+            configData = {};
+        }
+        mailer = {};
+        
+        // Configuration
+        mailer.host = configData.host || 'localhost';
+        mailer.port = configData.port || 25;
+        mailer.ssl = configData.ssl || false;
+        mailer.auth = configData.auth || false;
+        mailer.username = mailer.auth ? configData.username : '';
+        mailer.password = mailer.auth ? configData.password : '';
+        mailer.textContentSubtype =
+            configData.content_type === 'text/html' ? 'html' : 'plain';      
+        
+        // Attach "public" methods
+        mailer.send = send;
+
+        return mailer;
+}; // END: getMailer()
+
+/**
+ * Send an email.<br>
+ * <br>
+ * This function can be called as a method of a retrieved "mailer" object.
+ * Configuration happens on retrieval via the <code>getMailer</code> method.
  * 
  * @param {object} sendData Send data object
  * @param {string} sendData.from Sender email address
@@ -123,7 +135,7 @@ exports.setClientGetter = function (clientGetter) {
  * by the server.</li>
  * </ul>
  */
-exports.send = function (sendData, callback) {
+function send (sendData, callback) {
     var smtpClient;			// Underlying SMTP client
     var mailOpts;			// Mail client options
     var fromAddr;			// "from" address as a Java object
@@ -164,7 +176,7 @@ exports.send = function (sendData, callback) {
         return;
     }
 
-    sendContentSubtype = textContentSubtype;
+    sendContentSubtype = this.textContentSubtype;
     if (sendData.content_type === 'text/html') {
         sendContentSubtype = 'html';
     } else if (sendData.content_type === 'text/plain') {
@@ -238,15 +250,15 @@ exports.send = function (sendData, callback) {
     mailOpts = {
             ignoreTLS: true
     };
-    if (auth) {
+    if (this.auth) {
         mailOpts.auth = {};
-        mailOpts.auth.user = username;
-        mailOpts.auth.pass = password;
+        mailOpts.auth.user = this.username;
+        mailOpts.auth.pass = this.password;
     }
-    if (ssl) {
+    if (this.ssl) {
         mailOpts.secureConnection = true;
     }
-    smtpClient = getSmtpClient(port, host, mailOpts);
+    smtpClient = getSmtpClient(this.port, this.host, mailOpts);
 
     // =======================
     // Set exception handlers
@@ -293,7 +305,7 @@ exports.send = function (sendData, callback) {
         var msgBao;		// Intermediate ByteArrayOutputStream for the message
 
         try {
-            message = new MimeMessage(MailSession.getInstance(System.getProperties()));
+            message =new MimeMessage(MailSession.getInstance(System.getProperties()));
             message.setFrom(fromAddr);
             message.setRecipients(RecipientType.TO, toAddrs);
             if (ccAddrs.length > 0) {
@@ -327,13 +339,19 @@ exports.send = function (sendData, callback) {
     smtpClient.on('end', function () {
         callback(sendError, sendResult);
     });
-}; 
+} // END: send()
+
+//======================
+// Event Bus Connection
+//======================
 
 //If we have an address, connect to the event  bus and make the "send" method
 //available with roughly the same API
-if (ebAddress) {
-    vertx.eventBus.registerHandler(ebAddress, function (sendDataJSON, replier) {
-        var data;
+if (container.config.address) {
+    vertx.eventBus.registerHandler(container.config.address,
+    function (sendDataJSON, replier) {
+        var data;       // Parsed message data
+        var mailer;     // mailer object to send the email with
 
         try {
             data = JSON.parse(sendDataJSON);
@@ -344,7 +362,8 @@ if (ebAddress) {
             return;
         }
 
-        exports.send(data, function (err, result) {
+        mailer = exports.getMailer(container.config);
+        mailer.send(data, function (err, result) {
             if (err) {
                 replier(JSON.stringify({
                     errorMsg: err.toString()

@@ -83,7 +83,43 @@
 
     
         
-            <div class="description">An easy to use module to send email messages via SMTP asynchronously.<br><br>This module can be used in two modes:<ul><li>As a <b>CommonJS module</b>: Include this module as a resource in yourVert.x project by specifying<code>var a_mailer = require('jslibs/a-mailer/lib/a-mailer');</code>in your JavaScript file.</li><li>As a <b>runnable Vert.x module</b>: Deploy as a Vert.x module and sendyour email messages on the event bus.</li></ul>In both cases the module needs some configuration to work properly:<ul><li><code>address</code> Event bus address on which the module is listeningfor send requests. Only required when the module is used as a runnableVert.x module.</li><li><code>host</code> {string} SMTP server host</li><li><code>port</code> {integer} SMTP server port</li><li><code>ssl</code> {boolean} If set to <code>true</code> uses an encryptedconnection to the server right from the start. Often combined with<code>port</code> set to 465, e.g. in the case of Gmail. Default is<code>false</code>.</li><li><code>auth</code> {boolean} Set to <code>true</code> if the serverrequires authentication. Default is <code>false</code>.</li><li><code>username</code> {string} Authentication user.</li><li><code>password</code> {string} Authentication password.</li><li><code>content_type</code> {string} Default MIME type/subtype for theemail body; can be set to <code>text/html</code>. Every other or no valuewill be interpreted as <code>text/plain</code>.</li></ul><b>NOTE on character encoding</b><br>The email subject and body will always be encoded using UTF-8. If you usethe module from JavaScript as a CommonJS module and include non-UScharacters, make sure to encode the source code file in UTF-8, too.Otherwise your email content might get mangled.</div>
+            <div class="description">An easy to use module to send email messages via SMTP asynchronously.<br>
+<br>
+This module can be used in two modes:
+<ul>
+<li>As a <b>CommonJS module</b>: Include this module as a resource in your
+Vert.x project by specifying
+<code>var a_mailer = require('jslibs/a-mailer/lib/a-mailer');</code>
+in your JavaScript file.</li>
+<li>As a <b>runnable Vert.x module</b>: Deploy as a Vert.x module and send
+your email messages on the event bus.</li>
+</ul>
+In both cases the module or a mailer object retrieved by the
+<code>getMailer</code> method needs some configuration to work properly:
+<ul>
+<li><code>address</code> {string} Event bus address on which the module is
+listening for send requests. Only required when the module is used as a
+runnable Vert.x module.</li>
+<li><code>host</code> {string} SMTP server host</li>
+<li><code>port</code> {integer} SMTP server port</li>
+<li><code>ssl</code> {boolean} If set to <code>true</code> uses an encrypted
+connection to the server right from the start. Often combined with
+<code>port</code> set to 465, e.g. in the case of Gmail. Default is
+<code>false</code>.</li>
+<li><code>auth</code> {boolean} Set to <code>true</code> if the server
+requires authentication. Default is <code>false</code>.</li>
+<li><code>username</code> {string} Authentication user.</li>
+<li><code>password</code> {string} Authentication password.</li>
+<li><code>content_type</code> {string} Default MIME type/subtype for the
+email body; can be set to <code>text/html</code>. Every other or no value
+will be interpreted as <code>text/plain</code>.</li>
+</ul>
+
+<b>NOTE on character encoding</b><br>
+The email subject and body will always be encoded using UTF-8. If you use
+the module from JavaScript and include non-US characters, make sure to
+encode the source code file in UTF-8, too. Otherwise your email content
+might get mangled.</div>
         
 
         
@@ -111,7 +147,9 @@
 
     
     <dt class="tag-license">License:</dt>
-    <dd class="tag-license"><ul class="dummy"><li>MITCopyright (c) 2013 Matthias Ohlemeyer</li></ul></dd>
+    <dd class="tag-license"><ul class="dummy"><li>MIT
+
+Copyright (c) 2013 Matthias Ohlemeyer</li></ul></dd>
     
 
     
@@ -119,7 +157,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="a-mailer.js.html">a-mailer.js</a>, <a href="a-mailer.js.html#sunlight-1-line-1">line 1</a>
+        <a href="a-mailer.js.html">a-mailer.js</a>, <a href="a-mailer.js.html#sunlight-1-line-4">line 4</a>
     </li></ul></dd>
     
 
@@ -153,7 +191,7 @@
         <dl>
             
 <dt>
-    <h4 class="name" id="configure"><span class="type-signature">&lt;static> </span>configure<span class="signature">(config)</span><span class="type-signature"></span></h4>
+    <h4 class="name" id="getMailer"><span class="type-signature">&lt;static> </span>getMailer<span class="signature">(configData)</span><span class="type-signature"> &rarr; {object}</span></h4>
     
     
 </dt>
@@ -161,7 +199,13 @@
     
     
     <div class="description">
-        Configure the module<br><br>This method will be called, when the module is used as a CommonJS module.When used as Vert.x module it is called internally with theconfiguration data from <code>mod.json</code>.<br><br><b>NOTE:</b> A call to <code>configure</code> affects all subsequent emailsending actions. The A-Mailer module is not well suited to setting updifferent mailing hosts and using them in a single application sinceconfiguration is done on module basis!
+        Retrieve a new mailer object<br>
+<br>
+Returns an individually configured (host and authentication data) mailer
+object, with method(s) to send email messages.<br>
+Currently the object has a single <code>send</code> method (see the
+documentation for the inner <code>send</code> method of this module; it is
+attached to the retrieved mailer object).
     </div>
     
 
@@ -195,7 +239,7 @@
 
         <tr>
             
-                <td class="name"><code>config</code></td>
+                <td class="name"><code>configData</code></td>
             
 
             <td class="type">
@@ -211,7 +255,8 @@
 
             
 
-            <td class="description last">The configuration object. Might contain zero or moreof the configuration properties mentioned in the module description:<code>host</code>, <code>port</code>...</td>
+            <td class="description last">Configuration data as mentioned in the module
+description, except for the <code>address</code> property.</td>
         </tr>
 
 	
@@ -243,7 +288,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="a-mailer.js.html">a-mailer.js</a>, <a href="a-mailer.js.html#sunlight-1-line-77">line 77</a>
+        <a href="a-mailer.js.html">a-mailer.js</a>, <a href="a-mailer.js.html#sunlight-1-line-84">line 84</a>
     </li></ul></dd>
     
 
@@ -264,6 +309,29 @@
     
     
     
+    <h5>Returns:</h5>
+    
+            
+<div class="param-desc">
+    A new mailer object.
+</div>
+
+
+
+<dl>
+	<dt>
+		Type
+	</dt>
+	<dd>
+		
+<span class="param-type">object</span>
+
+
+	</dd>
+</dl>
+
+
+        
     
     
 </dd>
@@ -271,7 +339,7 @@
         
             
 <dt>
-    <h4 class="name" id="send"><span class="type-signature">&lt;static> </span>send<span class="signature">(sendData, <span class="optional">callback</span>)</span><span class="type-signature"></span></h4>
+    <h4 class="name" id="send"><span class="type-signature">&lt;inner> </span>send<span class="signature">(sendData, <span class="optional">callback</span>)</span><span class="type-signature"></span></h4>
     
     
 </dt>
@@ -279,7 +347,10 @@
     
     
     <div class="description">
-        Send an email.
+        Send an email.<br>
+<br>
+This function can be called as a method of a retrieved "mailer" object.
+Configuration happens on retrieval via the <code>getMailer</code> method.
     </div>
     
 
@@ -435,7 +506,8 @@
                 </td>
             
 
-            <td class="description last">Single "TO" Recipient email address as astring or an array of addresses</td>
+            <td class="description last">Single "TO" Recipient email address as a
+string or an array of addresses</td>
         </tr>
 
 	
@@ -475,7 +547,8 @@
                 </td>
             
 
-            <td class="description last">Single "CC" Recipient email address as astring or an array of addresses</td>
+            <td class="description last">Single "CC" Recipient email address as a
+string or an array of addresses</td>
         </tr>
 
 	
@@ -515,7 +588,8 @@
                 </td>
             
 
-            <td class="description last">Single "BCC" Recipient email address asa string or an array of addresses</td>
+            <td class="description last">Single "BCC" Recipient email address as
+a string or an array of addresses</td>
         </tr>
 
 	
@@ -626,7 +700,10 @@
                 </td>
             
 
-            <td class="description last">MIME type for this send request;either <code>text/plain</code> or <code>text/html</code>. If otherwisespecified or not specified at all the configured MIME type for the modulewill be used as the default value.</td>
+            <td class="description last">MIME type for this send request;
+either <code>text/plain</code> or <code>text/html</code>. If otherwise
+specified or not specified at all the configured MIME type for the module
+will be used as the default value.</td>
         </tr>
 
 	
@@ -666,7 +743,15 @@
 
             
 
-            <td class="description last">Callback function; called after the email issent or when an error occurs. The first argument is either an error objector null if everything went ok. In case of success the second argument isa result object with up to two properties:<ul><li><code>response</code> The server's response message.</li><li><code>rcptFailedAdrs</code> Array of email addresses, which were rejectedby the server.</li></ul></td>
+            <td class="description last">Callback function; called after the email is
+sent or when an error occurs. The first argument is either an error object
+or null if everything went ok. In case of success the second argument is
+a result object with up to two properties:
+<ul>
+<li><code>response</code> The server's response message.</li>
+<li><code>rcptFailedAdrs</code> Array of email addresses, which were rejected
+by the server.</li>
+</ul></td>
         </tr>
 
 	
@@ -698,7 +783,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="a-mailer.js.html">a-mailer.js</a>, <a href="a-mailer.js.html#sunlight-1-line-123">line 123</a>
+        <a href="a-mailer.js.html">a-mailer.js</a>, <a href="a-mailer.js.html#sunlight-1-line-138">line 138</a>
     </li></ul></dd>
     
 
@@ -744,7 +829,7 @@
 					
 		<span class="jsdoc-message">
 		Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.2.0-dev</a>
-		on Sat Oct 05 2013 18:55:46 GMT+0200 (MESZ) using the <a href="https://github.com/terryweiss/docstrap">DocStrap template</a>.
+		on Wed Oct 09 2013 20:11:49 GMT+0200 (MESZ) using the <a href="https://github.com/terryweiss/docstrap">DocStrap template</a>.
 		</span>
 				</footer>
 			</div>

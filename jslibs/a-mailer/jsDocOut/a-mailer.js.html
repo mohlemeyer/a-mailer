@@ -71,7 +71,11 @@
     
     <section>
         <article>
-            <pre class="sunlight-highlight-javascript linenums">/**
+            <pre class="sunlight-highlight-javascript linenums">/*jslint sloppy:true, white:true, vars:true, plusplus: true, unparam: true */
+/*global require, Packages, exports, textContentSubtype, auth, username,
+password, ssl, port, host, send */
+
+/**
  * An easy to use module to send email messages via SMTP asynchronously.&lt;br>
  * &lt;br>
  * This module can be used in two modes:
@@ -83,11 +87,12 @@
  * &lt;li>As a &lt;b>runnable Vert.x module&lt;/b>: Deploy as a Vert.x module and send
  * your email messages on the event bus.&lt;/li>
  * &lt;/ul>
- * In both cases the module needs some configuration to work properly:
+ * In both cases the module or a mailer object retrieved by the
+ * &lt;code>getMailer&lt;/code> method needs some configuration to work properly:
  * &lt;ul>
- * &lt;li>&lt;code>address&lt;/code> Event bus address on which the module is listening
- * for send requests. Only required when the module is used as a runnable
- * Vert.x module.&lt;/li>
+ * &lt;li>&lt;code>address&lt;/code> {string} Event bus address on which the module is
+ * listening for send requests. Only required when the module is used as a
+ * runnable Vert.x module.&lt;/li>
  * &lt;li>&lt;code>host&lt;/code> {string} SMTP server host&lt;/li>
  * &lt;li>&lt;code>port&lt;/code> {integer} SMTP server port&lt;/li>
  * &lt;li>&lt;code>ssl&lt;/code> {boolean} If set to &lt;code>true&lt;/code> uses an encrypted
@@ -102,11 +107,12 @@
  * email body; can be set to &lt;code>text/html&lt;/code>. Every other or no value
  * will be interpreted as &lt;code>text/plain&lt;/code>.&lt;/li>
  * &lt;/ul>
+ * 
  * &lt;b>NOTE on character encoding&lt;/b>&lt;br>
  * The email subject and body will always be encoded using UTF-8. If you use
- * the module from JavaScript as a CommonJS module and include non-US
- * characters, make sure to encode the source code file in UTF-8, too.
- * Otherwise your email content might get mangled.
+ * the module from JavaScript and include non-US characters, make sure to
+ * encode the source code file in UTF-8, too. Otherwise your email content
+ * might get mangled.
  * 
  * @module jslibs/a-mailer/lib/a-mailer
  * @author Matthias Ohlemeyer (mohlemeyer@gmail.com)
@@ -126,48 +132,57 @@ var System = Packages.java.lang.System;
 var InternetAddress = Packages.javax.mail.internet.InternetAddress;
 var RecipientType = Packages.javax.mail.Message.RecipientType;
 var ByteArrayOutputStream = Packages.java.io.ByteArrayOutputStream;
-var javaDate = Packages.java.util.Date;
+var JavaDate = Packages.java.util.Date;
 
-//Set up mailer configuration
-var moduleThis = this;
-
-/**
- * Configure the module&lt;br>
- * &lt;br>
- * This method will be called, when the module is used as a CommonJS module.
- * When used as Vert.x module it is called internally with the
- * configuration data from &lt;code>mod.json&lt;/code>.&lt;br>
- * &lt;br>
- * &lt;b>NOTE:&lt;/b> A call to &lt;code>configure&lt;/code> affects all subsequent email
- * sending actions. The A-Mailer module is not well suited to setting up
- * different mailing hosts and using them in a single application since
- * configuration is done on module basis! 
- * 
- * @param {object} config The configuration object. Might contain zero or more
- * of the configuration properties mentioned in the module description:
- * &lt;code>host&lt;/code>, &lt;code>port&lt;/code>...
+/*
+ * Only used to inject a client getter stub to support unit testing!
  */
-exports.configure = function (config) {
-	moduleThis.ebAddress = config.address;
-	moduleThis.host = config.host || 'localhost';
-	moduleThis.port = config.port || 25;
-	moduleThis.ssl = config.ssl || false;
-	moduleThis.auth = config.auth || false;
-	moduleThis.username = moduleThis.auth ? config.username : '';
-	moduleThis.password = moduleThis.auth ? config.password : '';
-	moduleThis.textContentSubtype =
-		config.content_type === 'text/html' ? 'html' : 'plain';
-}; // END: configure()
-
-exports.configure(container.config);
-
-// Only used to inject a client getter stub to support unit testing!
 exports.setClientGetter = function (clientGetter) {
-	getSmtpClient = clientGetter;
+    getSmtpClient = clientGetter;
 };
 
 /**
- * Send an email.
+ * Retrieve a new mailer object&lt;br>
+ * &lt;br>
+ * Returns an individually configured (host and authentication data) mailer
+ * object, with method(s) to send email messages.&lt;br>
+ * Currently the object has a single &lt;code>send&lt;/code> method (see the
+ * documentation for the inner &lt;code>send&lt;/code> method of this module; it is
+ * attached to the retrieved mailer object).
+ * 
+ * @param {object} configData Configuration data as mentioned in the module
+ * description, except for the &lt;code>address&lt;/code> property.
+ * @returns {object} A new mailer object.
+ */
+exports.getMailer = function (configData) {
+        var mailer; // The new mailer object
+        
+        if (!configData) {
+            configData = {};
+        }
+        mailer = {};
+        
+        // Configuration
+        mailer.host = configData.host || 'localhost';
+        mailer.port = configData.port || 25;
+        mailer.ssl = configData.ssl || false;
+        mailer.auth = configData.auth || false;
+        mailer.username = mailer.auth ? configData.username : '';
+        mailer.password = mailer.auth ? configData.password : '';
+        mailer.textContentSubtype =
+            configData.content_type === 'text/html' ? 'html' : 'plain';      
+        
+        // Attach "public" methods
+        mailer.send = send;
+
+        return mailer;
+}; // END: getMailer()
+
+/**
+ * Send an email.&lt;br>
+ * &lt;br>
+ * This function can be called as a method of a retrieved "mailer" object.
+ * Configuration happens on retrieval via the &lt;code>getMailer&lt;/code> method.
  * 
  * @param {object} sendData Send data object
  * @param {string} sendData.from Sender email address
@@ -193,211 +208,246 @@ exports.setClientGetter = function (clientGetter) {
  * by the server.&lt;/li>
  * &lt;/ul>
  */
-exports.send = function (sendData, callback) {
-	var smtpClient;			// Underlying SMTP client
-	var mailOpts;			// Mail client options
-	var fromAddr;			// "from" address as a Java object
-	var toAddrs;			// Array of "to" addresses as Java objects
-	var ccAddrs;			// Array of "cc" addresses as Java objects
-	var bccAddrs;			// Array of "bcc" addresses as Java objects
-	var sendError;			// Error in the course of the send method
-	var sendResult;			// Result of send operation
-	var sendContentSubtype;	// MIME subtype for this send request
-	
-	
-	// ===========
-	// Initialize
-	// ===========
-	
-	// Should be allowed to be called without callback
-	callback = callback || function () {};
-	sendError = null;
-	sendResult = {};
-	sendContentSubtype = textContentSubtype;
-	if (sendData.content_type === 'text/html') {
-		sendContentSubtype = 'html';
-	} else if (sendData.content_type === 'text/plain') {
-		sendContentSubtype = 'plain';
-	}
-	
-	// ================
-	// Check arguments
-	// ================
-	if (!sendData) {
-		callback(new Error('a-mailer.send: Missing send data'));
-		return;
-	}
-	if (!sendData.from) {
-		callback(new Error('a-mailer.send: Missing "from" field'));
-		return;
-	}
-	if (!sendData.to) {
-		callback(new Error('a-mailer.send: Missing "to" field'));
-		return;
-	}
-	if (!sendData.subject) {
-		callback(new Error('a-mailer.send: Missing "subject" field'));
-		return;
-	}
+function send (sendData, callback) {
+    var smtpClient;			// Underlying SMTP client
+    var mailOpts;			// Mail client options
+    var fromAddr;			// "from" address as a Java object
+    var toAddrs;			// Array of "to" addresses as Java objects
+    var ccAddrs;			// Array of "cc" addresses as Java objects
+    var bccAddrs;			// Array of "bcc" addresses as Java objects
+    var sendError;			// Error in the course of the send method
+    var sendResult;			// Result of send operation
+    var sendContentSubtype;	// MIME subtype for this send request
 
-	// ============================
-	// Check sender and recipients
-	// ============================
-	
-	/*
-	 * Parses a string or an array of strings into an array of Java
-	 * email addresses (javax.mail.internet.InternetAddress).
-	 */
-	function parseAddresses (addrs) {
-		var i, l;	// Loop vars
-		var iAddrs;	// Array of Java internet addresses
-		
-		if (typeof addrs === 'string') {
-			// In case of a string, we expect a single address
-			return [InternetAddress.parse(addrs)[0]];
-		} else {
-			// Must be an array with potentially many address strings,
-			// each representing a single address
-			iAddrs = [];
-			for (i = 0, l = addrs.length; i &lt; l; i++) {
-				iAddrs.push(InternetAddress.parse(addrs[i])[0]);
-			}
-			return iAddrs;
-		}
-	} // END: parseAddresses()
-	
-	try {
-		fromAddr = InternetAddress.parse(sendData.from)[0];
-	} catch (parseErr) {
-		callback(new Error('a-mailer.send: Illegal "from" address: ' +
-				parseErr.toString()));
-		return;
-	}
-	try {
-		toAddrs = parseAddresses(sendData.to);
-		if (toAddrs.length === 0) {
-			throw new Error('Missing "to" address');
-		}
-	} catch (parseErr) {
-		callback(new Error('a-mailer.send: Illegal "to" address: ' +
-				parseErr.toString()));
-		return;		
-	}
-	try {
-		ccAddrs = parseAddresses(sendData.cc || []);
-	} catch (parseErr) {
-		callback(new Error('a-mailer.send: Illegal "cc" address: ' +
-				parseErr.toString()));
-		return;		
-	}
-	try {
-		bccAddrs = parseAddresses(sendData.bcc || []);
-	} catch (parseErr) {
-		callback(new Error('a-mailer.send: Illegal "bcc" address: ' +
-				parseErr.toString()));
-		return;		
-	}
-	
-	// ===================
-	// Set up mail client
-	// ===================
-	mailOpts = {
-			ignoreTLS: true
-	};
-	if (auth) {
-		mailOpts.auth = {};
-		mailOpts.auth.user = username;
-		mailOpts.auth.pass = password;
-	}
-	if (ssl) {
-		mailOpts.secureConnection = true;
-	}
-	smtpClient = getSmtpClient(port, host, mailOpts);
 
-	// =======================
-	// Set exception handlers
-	// =======================
+    // ===========
+    // Initialize
+    // ===========
 
-	// Calls the send callback with the error, which has a "toString" method
-	// and optionally the properties "name", "data", "code".
-	smtpClient.on('error', function(err){
-		// "close" triggers the "end" handler
-		sendError = err;
-		smtpClient.close();
-	});
+    // Should be allowed to be called without callback
+    callback = callback || function () {return;};
+    sendError = null;
+    sendResult = {};
 
-	smtpClient.on('rcptFailed', function(failedAddresses){
-		sendResult.rcptFailedAdrs = failedAddresses;
-	});
+    // ================
+    // Check arguments
+    // ================
+    if (!sendData) {
+        callback(new Error('a-mailer.send: Missing send data'));
+        return;
+    }
+    if (!sendData.from) {
+        callback(new Error('a-mailer.send: Missing "from" field'));
+        return;
+    }
+    if (!sendData.to) {
+        callback(new Error('a-mailer.send: Missing "to" field'));
+        return;
+    }
+    if (!sendData.subject) {
+        callback(new Error('a-mailer.send: Missing "subject" field'));
+        return;
+    }
 
-	// ==========================
-	// Set control flow handlers
-	// ==========================
-	smtpClient.once('idle', function () {
-		var i, l;				// Loop vars
-		var envelopeToAddrs;	// Array of "to" addresses for the envelope
-		
-		envelopeToAddrs = [];
-		for (i = 0, l = toAddrs.length; i &lt; l; i++) {
-			envelopeToAddrs.push(toAddrs[i].getAddress());
-		}
-		for (i = 0, l = ccAddrs.length; i &lt; l; i++) {
-			envelopeToAddrs.push(ccAddrs[i].getAddress());
-		}
-		for (i = 0, l = bccAddrs.length; i &lt; l; i++) {
-			envelopeToAddrs.push(bccAddrs[i].getAddress());
-		}
-		
-		smtpClient.useEnvelope({
-			from: fromAddr.getAddress(),
-			to: envelopeToAddrs
-		});
-	});
+    sendContentSubtype = this.textContentSubtype;
+    if (sendData.content_type === 'text/html') {
+        sendContentSubtype = 'html';
+    } else if (sendData.content_type === 'text/plain') {
+        sendContentSubtype = 'plain';
+    }
 
-	smtpClient.on('message', function () {
-		var message;	// The complete message: Header and body
-		var msgBao;		// Intermediate ByteArrayOutputStream for the message
-		
-		try {
-			message = new MimeMessage(MailSession.getInstance(System.getProperties()));
-			message.setFrom(fromAddr);
-			message.setRecipients(RecipientType.TO, toAddrs);
-			if (ccAddrs.length > 0) {
-				message.setRecipients(RecipientType.CC, ccAddrs);
-			}
-			if (bccAddrs.length > 0) {
-				message.setRecipients(RecipientType.BCC, bccAddrs);
-			}
-			message.setSubject(sendData.subject, 'utf-8');
-			message.setText(sendData.body || '', 'utf-8', sendContentSubtype); // TODO: Document usage of text-encoding utf-8!
-			message.setSentDate(new javaDate());
-			msgBao = new ByteArrayOutputStream();
-			message.writeTo(msgBao);
-			smtpClient.end(new vertx.Buffer(msgBao.toByteArray()));
-		} catch (msgError) {
-			sendError = msgError;
-			smtpClient.close();
-		}
-	});
+    // ============================
+    // Check sender and recipients
+    // ============================
 
-	smtpClient.on('ready', function (success, response) {
-		if (!success) {
-			sendError = new Error(response);
-		}
-		sendResult.response = response;
+    /*
+     * Parses a string or an array of strings into an array of Java
+     * email addresses (javax.mail.internet.InternetAddress).
+     */
+    function parseAddresses (addrs) {
+        var i, l;	// Loop vars
+        var iAddrs;	// Array of Java internet addresses
+        var retVal; // Return value
 
-		// "quit" triggers the "end" handler
-		smtpClient.quit();
-	});
-	
-	smtpClient.on('end', function () {
-		callback(sendError, sendResult);
-	});
-}; 
+        if (typeof addrs === 'string') {
+            // In case of a string, we expect a single address
+            retVal = [InternetAddress.parse(addrs)[0]];
+        } else {
+            // Must be an array with potentially many address strings,
+            // each representing a single address
+            iAddrs = [];
+            for (i = 0, l = addrs.length; i &lt; l; i++) {
+                iAddrs.push(InternetAddress.parse(addrs[i])[0]);
+            }
+            retVal = iAddrs;
+        }
+        
+        return retVal;
+    } // END: parseAddresses()
 
-// TODO: Connect to event bus
-// TODO: Handle the case when not event bus address is specified in the configuration:
-// Only when used as a vertx module, not when used as a CommonJS module</pre>
+    try {
+        fromAddr = InternetAddress.parse(sendData.from)[0];
+    } catch (parseErr) {
+        callback(new Error('a-mailer.send: Illegal "from" address: ' +
+                parseErr.toString()));
+        return;
+    }
+    try {
+        toAddrs = parseAddresses(sendData.to);
+        if (toAddrs.length === 0) {
+            throw new Error('Missing "to" address');
+        }
+    } catch (parseErr) {
+        callback(new Error('a-mailer.send: Illegal "to" address: ' +
+                parseErr.toString()));
+        return;		
+    }
+    try {
+        ccAddrs = parseAddresses(sendData.cc || []);
+    } catch (parseErr) {
+        callback(new Error('a-mailer.send: Illegal "cc" address: ' +
+                parseErr.toString()));
+        return;		
+    }
+    try {
+        bccAddrs = parseAddresses(sendData.bcc || []);
+    } catch (parseErr) {
+        callback(new Error('a-mailer.send: Illegal "bcc" address: ' +
+                parseErr.toString()));
+        return;		
+    }
+
+    // ===================
+    // Set up mail client
+    // ===================
+    mailOpts = {
+            ignoreTLS: true
+    };
+    if (this.auth) {
+        mailOpts.auth = {};
+        mailOpts.auth.user = this.username;
+        mailOpts.auth.pass = this.password;
+    }
+    if (this.ssl) {
+        mailOpts.secureConnection = true;
+    }
+    smtpClient = getSmtpClient(this.port, this.host, mailOpts);
+
+    // =======================
+    // Set exception handlers
+    // =======================
+
+    // Sets the "send error", which has a "toString" method
+    // and optionally the properties "name", "data", "code".
+    smtpClient.on('error', function(err){
+        // "close" triggers the "end" handler
+        sendError = err;
+        smtpClient.close();
+    });
+
+    smtpClient.on('rcptFailed', function(failedAddresses){
+        sendResult.rcptFailedAdrs = failedAddresses;
+    });
+
+    // ==========================
+    // Set control flow handlers
+    // ==========================
+    smtpClient.once('idle', function () {
+        var i, l;				// Loop vars
+        var envelopeToAddrs;	// Array of "to" addresses for the envelope
+
+        envelopeToAddrs = [];
+        for (i = 0, l = toAddrs.length; i &lt; l; i++) {
+            envelopeToAddrs.push(toAddrs[i].getAddress());
+        }
+        for (i = 0, l = ccAddrs.length; i &lt; l; i++) {
+            envelopeToAddrs.push(ccAddrs[i].getAddress());
+        }
+        for (i = 0, l = bccAddrs.length; i &lt; l; i++) {
+            envelopeToAddrs.push(bccAddrs[i].getAddress());
+        }
+
+        smtpClient.useEnvelope({
+            from: fromAddr.getAddress(),
+            to: envelopeToAddrs
+        });
+    });
+
+    smtpClient.on('message', function () {
+        var message;	// The complete message: Header and body
+        var msgBao;		// Intermediate ByteArrayOutputStream for the message
+
+        try {
+            message =new MimeMessage(MailSession.getInstance(System.getProperties()));
+            message.setFrom(fromAddr);
+            message.setRecipients(RecipientType.TO, toAddrs);
+            if (ccAddrs.length > 0) {
+                message.setRecipients(RecipientType.CC, ccAddrs);
+            }
+            if (bccAddrs.length > 0) {
+                message.setRecipients(RecipientType.BCC, bccAddrs);
+            }
+            message.setSubject(sendData.subject, 'utf-8');
+            message.setText(sendData.body || '', 'utf-8', sendContentSubtype);
+            message.setSentDate(new JavaDate());
+            msgBao = new ByteArrayOutputStream();
+            message.writeTo(msgBao);
+            smtpClient.end(new vertx.Buffer(msgBao.toByteArray()));
+        } catch (msgError) {
+            sendError = msgError;
+            smtpClient.close();
+        }
+    });
+
+    smtpClient.on('ready', function (success, response) {
+        if (!success) {
+            sendError = new Error(response);
+        }
+        sendResult.response = response;
+
+        // "quit" triggers the "end" handler
+        smtpClient.quit();
+    });
+
+    smtpClient.on('end', function () {
+        callback(sendError, sendResult);
+    });
+} // END: send()
+
+//======================
+// Event Bus Connection
+//======================
+
+//If we have an address, connect to the event  bus and make the "send" method
+//available with roughly the same API
+if (container.config.address) {
+    vertx.eventBus.registerHandler(container.config.address,
+    function (sendDataJSON, replier) {
+        var data;       // Parsed message data
+        var mailer;     // mailer object to send the email with
+
+        try {
+            data = JSON.parse(sendDataJSON);
+        } catch (parseErr) {
+            replier(JSON.stringify({
+                errorMsg: 'JSON parse error: ' + parseErr.toString()
+            }));
+            return;
+        }
+
+        mailer = exports.getMailer(container.config);
+        mailer.send(data, function (err, result) {
+            if (err) {
+                replier(JSON.stringify({
+                    errorMsg: err.toString()
+                }));
+            } else {
+                replier(JSON.stringify(result));
+            }
+        });
+    });
+}
+</pre>
         </article>
     </section>
 
@@ -413,7 +463,7 @@ exports.send = function (sendData, callback) {
 					
 		<span class="jsdoc-message">
 		Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.2.0-dev</a>
-		on Sat Oct 05 2013 18:55:46 GMT+0200 (MESZ) using the <a href="https://github.com/terryweiss/docstrap">DocStrap template</a>.
+		on Wed Oct 09 2013 20:11:49 GMT+0200 (MESZ) using the <a href="https://github.com/terryweiss/docstrap">DocStrap template</a>.
 		</span>
 				</footer>
 			</div>
