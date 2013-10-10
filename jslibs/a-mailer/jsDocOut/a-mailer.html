@@ -47,6 +47,10 @@
 					<ul class="dropdown-menu ">
 						
 						<li>
+							<a href="a-mailer-Mailer.html">Mailer</a>
+						</li>
+						
+						<li>
 							<a href="client-SMTPClient.html">SMTPClient</a>
 						</li>
 						
@@ -180,6 +184,13 @@ Copyright (c) 2013 Matthias Ohlemeyer</li></ul></dd>
     
 
     
+        <h3 class="subsection-title">Classes</h3>
+
+        <dl>
+            <dt><a href="a-mailer-Mailer.html">Mailer</a></dt>
+            <dd></dd>
+        </dl>
+    
 
     
 
@@ -191,7 +202,7 @@ Copyright (c) 2013 Matthias Ohlemeyer</li></ul></dd>
         <dl>
             
 <dt>
-    <h4 class="name" id="getMailer"><span class="type-signature">&lt;static> </span>getMailer<span class="signature">(configData)</span><span class="type-signature"> &rarr; {object}</span></h4>
+    <h4 class="name" id="getMailer"><span class="type-signature">&lt;static> </span>getMailer<span class="signature">(configData)</span><span class="type-signature"> &rarr; {Mailer}</span></h4>
     
     
 </dt>
@@ -288,7 +299,7 @@ description, except for the <code>address</code> property.</td>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="a-mailer.js.html">a-mailer.js</a>, <a href="a-mailer.js.html#sunlight-1-line-84">line 84</a>
+        <a href="a-mailer.js.html">a-mailer.js</a>, <a href="a-mailer.js.html#sunlight-1-line-83">line 83</a>
     </li></ul></dd>
     
 
@@ -324,7 +335,7 @@ description, except for the <code>address</code> property.</td>
 	</dt>
 	<dd>
 		
-<span class="param-type">object</span>
+<span class="param-type">Mailer</span>
 
 
 	</dd>
@@ -332,478 +343,6 @@ description, except for the <code>address</code> property.</td>
 
 
         
-    
-    
-</dd>
-
-        
-            
-<dt>
-    <h4 class="name" id="send"><span class="type-signature">&lt;inner> </span>send<span class="signature">(sendData, <span class="optional">callback</span>)</span><span class="type-signature"></span></h4>
-    
-    
-</dt>
-<dd>
-    
-    
-    <div class="description">
-        Send an email.<br>
-<br>
-This function can be called as a method of a retrieved "mailer" object.
-Configuration happens on retrieval via the <code>getMailer</code> method.
-    </div>
-    
-
-    
-    
-    
-    
-    
-        <h5>Parameters:</h5>
-        
-
-<table class="params table table-striped">
-    <thead>
-	<tr>
-		
-		<th>Name</th>
-		
-
-		<th>Type</th>
-
-		
-		<th>Argument</th>
-		
-
-		
-
-		<th class="last">Description</th>
-	</tr>
-	</thead>
-
-	<tbody>
-	
-
-        <tr>
-            
-                <td class="name"><code>sendData</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">object</span>
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-
-                
-
-                
-                </td>
-            
-
-            
-
-            <td class="description last">Send data object
-                <h6>Properties</h6>
-                
-
-<table class="params table table-striped">
-    <thead>
-	<tr>
-		
-		<th>Name</th>
-		
-
-		<th>Type</th>
-
-		
-		<th>Argument</th>
-		
-
-		
-		<th>Default</th>
-		
-
-		<th class="last">Description</th>
-	</tr>
-	</thead>
-
-	<tbody>
-	
-
-        <tr>
-            
-                <td class="name"><code>from</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">string</span>
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-
-                
-
-                
-                </td>
-            
-
-            
-                <td class="default">
-                
-                </td>
-            
-
-            <td class="description last">Sender email address</td>
-        </tr>
-
-	
-
-        <tr>
-            
-                <td class="name"><code>to</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">string</span>
-|
-
-<span class="param-type">array</span>
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-
-                
-
-                
-                </td>
-            
-
-            
-                <td class="default">
-                
-                </td>
-            
-
-            <td class="description last">Single "TO" Recipient email address as a
-string or an array of addresses</td>
-        </tr>
-
-	
-
-        <tr>
-            
-                <td class="name"><code>cc</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">string</span>
-|
-
-<span class="param-type">array</span>
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-                    &lt;optional><br>
-                
-
-                
-
-                
-                </td>
-            
-
-            
-                <td class="default">
-                
-                </td>
-            
-
-            <td class="description last">Single "CC" Recipient email address as a
-string or an array of addresses</td>
-        </tr>
-
-	
-
-        <tr>
-            
-                <td class="name"><code>bcc</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">string</span>
-|
-
-<span class="param-type">array</span>
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-                    &lt;optional><br>
-                
-
-                
-
-                
-                </td>
-            
-
-            
-                <td class="default">
-                
-                </td>
-            
-
-            <td class="description last">Single "BCC" Recipient email address as
-a string or an array of addresses</td>
-        </tr>
-
-	
-
-        <tr>
-            
-                <td class="name"><code>subject</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">string</span>
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-
-                
-
-                
-                </td>
-            
-
-            
-                <td class="default">
-                
-                </td>
-            
-
-            <td class="description last">Email subject</td>
-        </tr>
-
-	
-
-        <tr>
-            
-                <td class="name"><code>body</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">string</span>
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-                    &lt;optional><br>
-                
-
-                
-
-                
-                </td>
-            
-
-            
-                <td class="default">
-                
-                    ''
-                
-                </td>
-            
-
-            <td class="description last">Email body</td>
-        </tr>
-
-	
-
-        <tr>
-            
-                <td class="name"><code>content_type</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">string</span>
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-                    &lt;optional><br>
-                
-
-                
-
-                
-                </td>
-            
-
-            
-                <td class="default">
-                
-                </td>
-            
-
-            <td class="description last">MIME type for this send request;
-either <code>text/plain</code> or <code>text/html</code>. If otherwise
-specified or not specified at all the configured MIME type for the module
-will be used as the default value.</td>
-        </tr>
-
-	
-	</tbody>
-</table>
-
-            </td>
-        </tr>
-
-	
-
-        <tr>
-            
-                <td class="name"><code>callback</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">function</span>
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-                    &lt;optional><br>
-                
-
-                
-
-                
-                </td>
-            
-
-            
-
-            <td class="description last">Callback function; called after the email is
-sent or when an error occurs. The first argument is either an error object
-or null if everything went ok. In case of success the second argument is
-a result object with up to two properties:
-<ul>
-<li><code>response</code> The server's response message.</li>
-<li><code>rcptFailedAdrs</code> Array of email addresses, which were rejected
-by the server.</li>
-</ul></td>
-        </tr>
-
-	
-	</tbody>
-</table>
-
-    
-    
-    
-<dl class="details">
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-    <dt class="tag-source">Source:</dt>
-    <dd class="tag-source"><ul class="dummy"><li>
-        <a href="a-mailer.js.html">a-mailer.js</a>, <a href="a-mailer.js.html#sunlight-1-line-138">line 138</a>
-    </li></ul></dd>
-    
-
-    
-
-    
-
-    
-</dl>
-
-    
-    
-
-    
-
-    
-    
-    
-    
-    
     
     
 </dd>
@@ -829,7 +368,7 @@ by the server.</li>
 					
 		<span class="jsdoc-message">
 		Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.2.0-dev</a>
-		on Wed Oct 09 2013 20:11:49 GMT+0200 (MESZ) using the <a href="https://github.com/terryweiss/docstrap">DocStrap template</a>.
+		on Thu Oct 10 2013 22:20:20 GMT+0200 (MESZ) using the <a href="https://github.com/terryweiss/docstrap">DocStrap template</a>.
 		</span>
 				</footer>
 			</div>

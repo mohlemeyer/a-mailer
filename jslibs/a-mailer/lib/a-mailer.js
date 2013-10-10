@@ -1,6 +1,5 @@
 /*jslint sloppy:true, white:true, vars:true, plusplus: true, unparam: true */
-/*global require, Packages, exports, textContentSubtype, auth, username,
-password, ssl, port, host, send */
+/*global require, Packages, exports, Mailer */
 
 /**
  * An easy to use module to send email messages via SMTP asynchronously.<br>
@@ -79,37 +78,37 @@ exports.setClientGetter = function (clientGetter) {
  * 
  * @param {object} configData Configuration data as mentioned in the module
  * description, except for the <code>address</code> property.
- * @returns {object} A new mailer object.
+ * @returns {Mailer} A new mailer object.
  */
 exports.getMailer = function (configData) {
-        var mailer; // The new mailer object
-        
-        if (!configData) {
-            configData = {};
-        }
-        mailer = {};
-        
-        // Configuration
-        mailer.host = configData.host || 'localhost';
-        mailer.port = configData.port || 25;
-        mailer.ssl = configData.ssl || false;
-        mailer.auth = configData.auth || false;
-        mailer.username = mailer.auth ? configData.username : '';
-        mailer.password = mailer.auth ? configData.password : '';
-        mailer.textContentSubtype =
-            configData.content_type === 'text/html' ? 'html' : 'plain';      
-        
-        // Attach "public" methods
-        mailer.send = send;
-
-        return mailer;
+        return new Mailer(configData);
 }; // END: getMailer()
 
 /**
- * Send an email.<br>
- * <br>
- * This function can be called as a method of a retrieved "mailer" object.
- * Configuration happens on retrieval via the <code>getMailer</code> method.
+ * Mailer object
+ * 
+ * @param {object} configData Configuration data as mentioned in the module
+ * description, except for the <code>address</code> property.
+ * 
+ * @constructor
+ */
+function Mailer (configData) {
+    if (!configData) {
+        configData = {};
+    }
+    
+    this.host = configData.host || 'localhost';
+    this.port = configData.port || 25;
+    this.ssl = configData.ssl || false;
+    this.auth = configData.auth || false;
+    this.username = this.auth ? configData.username : '';
+    this.password = this.auth ? configData.password : '';
+    this.textContentSubtype =
+        configData.content_type === 'text/html' ? 'html' : 'plain';      
+} // END: Mailer()
+
+/**
+ * Send an email.
  * 
  * @param {object} sendData Send data object
  * @param {string} sendData.from Sender email address
@@ -135,7 +134,7 @@ exports.getMailer = function (configData) {
  * by the server.</li>
  * </ul>
  */
-function send (sendData, callback) {
+Mailer.prototype.send = function (sendData, callback) {
     var smtpClient;			// Underlying SMTP client
     var mailOpts;			// Mail client options
     var fromAddr;			// "from" address as a Java object
@@ -339,7 +338,7 @@ function send (sendData, callback) {
     smtpClient.on('end', function () {
         callback(sendError, sendResult);
     });
-} // END: send()
+}; // END: send()
 
 //======================
 // Event Bus Connection
