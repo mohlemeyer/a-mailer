@@ -497,10 +497,7 @@ SMTPClient.prototype.close = function(){
 	    if(this.options.debug){
 	    	this.emit("debug", "Closing connection to the server");
 	    }
-	    if(this.socket && this.socket.socket && this.socket.socket.close && !this.socket.socket.destroyed){
-	        this.socket.socket.close();
-	    }
-	    if(this.socket && this.socket.close && !this.socket.destroyed){
+	    if(this.socket && this.socket.close){
 	        this.socket.close();
 	    }
 	} catch (ignore) {}
@@ -873,7 +870,10 @@ SMTPClient.prototype._actionMAIL = function(str){
  * @private
  */
 SMTPClient.prototype._actionRCPT = function(str){
-    if(Number(str.charAt(0)) != "2"){
+    if (str.substr(0, 3) == "421") {
+        this._onError(new Error("RCPT TO failed - " + str), false, str);
+        return;        
+    } else if (Number(str.charAt(0)) != "2") {
         // this is a soft error
         this._envelope.rcptFailed.push(this._envelope.curRecipient);
     }
@@ -934,5 +934,11 @@ SMTPClient.prototype._actionStream = function(str){
 
     // Waiting for new connections
     this._currentAction = this._actionIdle;
+    
+    // NOTE: The A-Mailer implementation in a-mailer.js relies on this
+    // implementation detail: DON'T CHANGE!
+    // Explanation: A-Mailer relies on the fact that the ready hander is
+    // called and has finished before the "idle" event is emitted, because
+    // in sets a one-time "idle" handler.
     vertx.runOnContext(function () { self.emit("idle"); });
 };

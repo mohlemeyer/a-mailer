@@ -13,6 +13,11 @@ var vertx = require('vertx');
 var container = require('vertx/container');
 var console = require('vertx/console');
 
+//Set up debugging output
+vertx.eventBus.registerHandler('mailerDbgOut', function (msg) {
+    console.log('MAILER DEBUG: ' + msg);
+});
+
 var email = {
         from: 'Sender Name <sender.name@domain.com>',
         to: ['Recipient_1 <rec.ipient1@domain1.com>', 'rec.ipient2@domain2.com'],
@@ -21,7 +26,7 @@ var email = {
         body: 'This is my email body.'
 };
 
-vertx.eventBus.send('mailSender', JSON.stringify(email), function (replyJSON) {
+vertx.eventBus.send('mailer', JSON.stringify(email), function (replyJSON) {
     var reply = JSON.parse(replyJSON);
 
     if (reply.errorMsg) {

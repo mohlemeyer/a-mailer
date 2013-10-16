@@ -34,7 +34,7 @@ differ.
 Start the module with something like this
 
 ```
-vertx runmod mohlemeyer~a-mailer~1.0 -conf {path_to_module_config} -cluster
+vertx runmod mohlemeyer~a-mailer~{version} -conf {path_to_module_config} -cluster
 ```
 
 ### Configuration
@@ -44,23 +44,29 @@ The JSON config file might contain the following options
 ```javascript
 {
     "test": <test indicator {boolean}; MUST BE SET TO false, otherwise unit tests will be run; default is true>
-    "address": <event bus address {string}>,
+    "address": <event bus address {string} for sending email messages>,
     "host": <mail host {string}, optional; default is 'localhost'>,
     "port": <port {integer}, optional; default is 25>
     "ssl": <ssl/tls indicator {boolean}; set to tru to use an encrypted connection; default is false>
     "auth": <authentication indicator {boolean}; set to true if authentication is required; default is false>,
     "username": <authentication user {string}>,
     "password": <authentication password {string}>,
-    "content_type": <email body default MIME type: "text/plain" or "text/html" allowed; default is "text/plain">
+    "content_type": <email body default MIME type: "text/plain" or "text/html" allowed; default is "text/plain">,
+    "sendTimeout": <max. time in ms for a send or sendSeq operation to finish; will otherwise result in an error>,
+    "debug": <debug indicator {boolean}; if true, debug messages will be published to the event bus>,
+    "debugAddress": <event bus address {string} to which debug output will be published>
 }
 ```
 
-#### Difference to `mod-mailer`
+#### Differences to `mod-mailer`
 
-The only difference should be in the `test`
-property. Set this to `false` in production. Leave the property out, e.g. by
-not specifying a config file at all, and the unit tests for the module will be
-run.
+* `test`: Leaving this property unspecified oder setting in to `true` will run
+the unit tests for the module; set to `false` for production.
+* `debug`: Start the module in *debug* mode; will generate debug messages
+for the communication stream between client and server.
+* `debugAddress`: Event bus address to which debug messages will be published.
+Debug messages are simple strings, not JSON structures.
+
 
 ### Sending an email
  
@@ -87,6 +93,17 @@ message on the event bus, which contains the following data:
     "response": <The final server response in case of success>
     "rcptFailedAdrs": <JSON array of email recipient addresses, which were rejected by the server>
 }
+```
+
+### Debugging
+
+Under the assumption that "mailerDbgOut" is set as the `debugAddress`, a handler
+for the mailer's event bus debug messages can be attached by
+
+```javascript
+vertx.eventBus.registerHandler('mailerDbgOut', function (msg) {
+    console.log('MAILER DEBUG: ' + msg);
+});
 ```
 
 #### Example
@@ -122,7 +139,9 @@ var mailer = aMailer.getMailer({
     auth: <authentication indicator {boolean}; set to true if authentication is required; default is false>,
     username: <authentication user {string}>,
     password: <authentication password {string}>,
-    content_type: <email body default MIME type: "text/plain" or "text/html" allowed; default is "text/plain">
+    content_type: <email body default MIME type: "text/plain" or "text/html" allowed; default is "text/plain">,
+    sendTimeout: <max. time in ms for a send or sendSeq operation to finish; will otherwise result in an error>,
+    debug: <debug indicator {boolean}; if true, debug messages will be published to an attached event handler>,
 });
 ```
 
@@ -149,6 +168,18 @@ mailer.send(message, replyHandler);
 `message` is a JavaScript object in analogy to the JSON message object in case
 of the use as a Vert.x module. More information might be obtained from the
 JSDoc documentation under `jslibs/a-mailer/jsDocOut`.
+
+### Debugging
+
+With `debug` set to true, the mailer becomes an
+[event emitter](https://github.com/hij1nx/EventEmitter2). A debug handler
+for the mailer can be attached by
+
+```javascript
+mailer.on('debug', function (msg) {
+    console.log('DEBUG: ' + msg);
+});
+```
 
 #### Example
 

@@ -75,7 +75,8 @@
     
     <section>
         <article>
-            <pre class="sunlight-highlight-javascript linenums">/*jslint sloppy:true, white:true, vars:true, plusplus: true, unparam: true */
+            <pre class="sunlight-highlight-javascript linenums">/*jslint sloppy:true, white:true, vars:true, plusplus: true, unparam: true,
+  nomen:true, todo:true */
 /*global require, Packages, exports, Mailer */
 
 /**
@@ -88,7 +89,7 @@
  * &lt;code>var a_mailer = require('jslibs/a-mailer/lib/a-mailer');&lt;/code>
  * in your JavaScript file.&lt;/li>
  * &lt;li>As a &lt;b>runnable Vert.x module&lt;/b>: Deploy as a Vert.x module and send
- * your email messages on the event bus.&lt;/li>
+ * your email messages through the event bus.&lt;/li>
  * &lt;/ul>
  * In both cases the module or a mailer object retrieved by the
  * &lt;code>getMailer&lt;/code> method needs some configuration to work properly:
@@ -109,6 +110,18 @@
  * &lt;li>&lt;code>content_type&lt;/code> {string} Default MIME type/subtype for the
  * email body; can be set to &lt;code>text/html&lt;/code>. Every other or no value
  * will be interpreted as &lt;code>text/plain&lt;/code>.&lt;/li>
+ * &lt;li>&lt;code>sendTimeout&lt;/code> Max. time in ms for a &lt;code>send&lt;/code>
+ * or &lt;code>sendSeq&lt;/code> operation to finish. Otherwise will result in an
+ * error.&lt;/li>
+ * &lt;li>&lt;code>debug&lt;/code> {boolean} Enable debugging. With
+ * &lt;code>debug&lt;/code> set to true, the smtp client-server communication will be
+ * sent to the "debug channel", implemented as an event handler on the Mailer
+ * object in case of the CommonJS usage or as an event bus handler in case
+ * of the Vert.x module usage.&lt;/li>
+ * &lt;li>&lt;code>debugAddress&lt;/code> {string} Event bus address to which debug
+ * messages will be published in case &lt;code>debug&lt;/code> is true and the module
+ * is run as a Vert.x module. Debug messages are simple strings, not JSON
+ * structures.&lt;/li>
  * &lt;/ul>
  * 
  * &lt;b>NOTE on character encoding&lt;/b>&lt;br>
@@ -126,7 +139,11 @@
 
 var vertx = require('vertx');
 var container = require('vertx/container');
+var EventEmitter = require("jslibs/a-mailer/thirdPartyDeps/eventemitter2/eventemitter2").EventEmitter2;
+var utillib = require("jslibs/a-mailer/thirdPartyDeps/nodejs/util/util");
 var getSmtpClient = require('jslibs/a-mailer/lib/client');
+
+var console = require('vertx/console'); // TODO: Remove
 
 //Required java classes/packages
 var MimeMessage = Packages.javax.mail.internet.MimeMessage;
@@ -136,6 +153,10 @@ var InternetAddress = Packages.javax.mail.internet.InternetAddress;
 var RecipientType = Packages.javax.mail.Message.RecipientType;
 var ByteArrayOutputStream = Packages.java.io.ByteArrayOutputStream;
 var JavaDate = Packages.java.util.Date;
+
+// Module scope variables
+var moduleScopeMailer;  // Reusable mailer on module scope for "sendSeq" method
+                        // to keep the connection open between send requests
 
 /*
  * Only used to inject a client getter stub to support unit testing!
@@ -154,7 +175,8 @@ exports.setClientGetter = function (clientGetter) {
  * attached to the retrieved mailer object).
  * 
  * @param {object} configData Configuration data as mentioned in the module
- * description, except for the &lt;code>address&lt;/code> property.
+ * description, except for the &lt;code>address&lt;/code> and
+ * &lt;code>debugAddress&lt;/code> properties.
  * @returns {Mailer} A new mailer object.
  */
 exports.getMailer = function (configData) {
@@ -165,7 +187,8 @@ exports.getMailer = function (configData) {
  * Mailer object
  * 
  * @param {object} configData Configuration data as mentioned in the module
- * description, except for the &lt;code>address&lt;/code> property.
+ * description, except for the &lt;code>address&lt;/code> and
+ * &lt;code>debugAddress&lt;/code> properties.
  * 
  * @constructor
  */
@@ -181,8 +204,101 @@ function Mailer (configData) {
     this.username = this.auth ? configData.username : '';
     this.password = this.auth ? configData.password : '';
     this.textContentSubtype =
-        configData.content_type === 'text/html' ? 'html' : 'plain';      
+        configData.content_type === 'text/html' ? 'html' : 'plain';
+    this.sendTimeout = configData.sendTimeout;
+    this.debug = configData.debug || false;
+    this.debugAddress = configData.debugAddress;
 } // END: Mailer()
+utillib.inherits(Mailer, EventEmitter);
+
+/*
+ * Parse one or more email addresses.&lt;br>
+ * &lt;br>
+ * @param {string|array} single email addresses or an array of email addresses
+ * @returns {array} Array of Java email addresses
+ * (javax.mail.internet.InternetAddress)
+ * @throws If address checking fails
+ */
+function parseAddresses (addrs) {
+    var i, l;   // Loop vars
+    var iAddrs; // Array of Java internet addresses
+    var retVal; // Return value
+
+    if (typeof addrs === 'string') {
+        // In case of a string, we expect a single address
+        retVal = [InternetAddress.parse(addrs)[0]];
+    } else {
+        // Must be an array with potentially more than one address string,
+        // each representing a single address
+        iAddrs = [];
+        for (i = 0, l = addrs.length; i &lt; l; i++) {
+            iAddrs.push(InternetAddress.parse(addrs[i])[0]);
+        }
+        retVal = iAddrs;
+    }
+    
+    return retVal;
+} // END: parseAddresses()
+
+/*
+ * Send envelope for given smtp client.&lt;br>
+ * &lt;br>
+ * @param {SmtpClient} client The smtp client
+ * @param {object} addrInfo Address info: fromAddr, toAddrs, ccAddrs, bccAddrs
+ */
+function sendEnvelope (client, addrInfo) {
+    var i, l;               // Loop vars
+    var envelopeToAddrs;    // Array of "to" addresses for the envelope
+
+    envelopeToAddrs = [];
+    for (i = 0, l = addrInfo.toAddrs.length; i &lt; l; i++) {
+        envelopeToAddrs.push(addrInfo.toAddrs[i].getAddress());
+    }
+    for (i = 0, l = addrInfo.ccAddrs.length; i &lt; l; i++) {
+        envelopeToAddrs.push(addrInfo.ccAddrs[i].getAddress());
+    }
+    for (i = 0, l = addrInfo.bccAddrs.length; i &lt; l; i++) {
+        envelopeToAddrs.push(addrInfo.bccAddrs[i].getAddress());
+    }
+
+    client.useEnvelope({
+        from: addrInfo.fromAddr.getAddress(),
+        to: envelopeToAddrs
+    });
+} // END: sendEnvelope
+
+/*
+ * Compose an email message.&lt;br>
+ * &lt;br>
+ * Reusable function for "send" and "sendSeq"
+ * 
+ * @param {object} addrInfo Address info: fromAddr, toAddrs, ccAddrs, bccAddrs
+ * @param {object} sendData Send data object with subject and body text
+ * @param {string} textContentSubtype "plain" or "html" for MIME types
+ * "text/plain" or "text/html" respectively
+ * @returns {Buffer} The message in a Vert.x buffer
+ */
+function composeMsg(addrInfo, sendData, textContentSubtype) {
+    var message;    // Message to compose
+    var msgBao;     // ByteArrayOutputStream for the messge
+
+    message = new MimeMessage(MailSession.getInstance(System.getProperties()));
+    message.setFrom(addrInfo.fromAddr);
+    message.setRecipients(RecipientType.TO, addrInfo.toAddrs);
+    if (addrInfo.ccAddrs && addrInfo.ccAddrs.length > 0) {
+        message.setRecipients(RecipientType.CC, addrInfo.ccAddrs);
+    }
+    if (addrInfo.bccAddrs && addrInfo.bccAddrs.length > 0) {
+        message.setRecipients(RecipientType.BCC, addrInfo.bccAddrs);
+    }
+    message.setSubject(sendData.subject, 'utf-8');
+    message.setText(sendData.body || '', 'utf-8', textContentSubtype);
+    message.setSentDate(new JavaDate());
+    msgBao = new ByteArrayOutputStream();
+    message.writeTo(msgBao);
+    
+    return new vertx.Buffer(msgBao.toByteArray());
+} // END: composeMsg()
 
 /**
  * Send an email.
@@ -218,10 +334,12 @@ Mailer.prototype.send = function (sendData, callback) {
     var toAddrs;			// Array of "to" addresses as Java objects
     var ccAddrs;			// Array of "cc" addresses as Java objects
     var bccAddrs;			// Array of "bcc" addresses as Java objects
+    var addressInfo;        // Address info for the message
     var sendError;			// Error in the course of the send method
     var sendResult;			// Result of send operation
     var sendContentSubtype;	// MIME subtype for this send request
-
+    var sendTimeoutTimer;   // Timer for send timeouts
+    var self = this;
 
     // ===========
     // Initialize
@@ -262,32 +380,6 @@ Mailer.prototype.send = function (sendData, callback) {
     // ============================
     // Check sender and recipients
     // ============================
-
-    /*
-     * Parses a string or an array of strings into an array of Java
-     * email addresses (javax.mail.internet.InternetAddress).
-     */
-    function parseAddresses (addrs) {
-        var i, l;	// Loop vars
-        var iAddrs;	// Array of Java internet addresses
-        var retVal; // Return value
-
-        if (typeof addrs === 'string') {
-            // In case of a string, we expect a single address
-            retVal = [InternetAddress.parse(addrs)[0]];
-        } else {
-            // Must be an array with potentially many address strings,
-            // each representing a single address
-            iAddrs = [];
-            for (i = 0, l = addrs.length; i &lt; l; i++) {
-                iAddrs.push(InternetAddress.parse(addrs[i])[0]);
-            }
-            retVal = iAddrs;
-        }
-        
-        return retVal;
-    } // END: parseAddresses()
-
     try {
         fromAddr = InternetAddress.parse(sendData.from)[0];
     } catch (parseErr) {
@@ -330,12 +422,23 @@ Mailer.prototype.send = function (sendData, callback) {
         mailOpts.auth = {};
         mailOpts.auth.user = this.username;
         mailOpts.auth.pass = this.password;
+        mailOpts.debug = this.debug;
     }
     if (this.ssl) {
         mailOpts.secureConnection = true;
     }
     smtpClient = getSmtpClient(this.port, this.host, mailOpts);
+    this.emit("debug", 'Smtp client created');
 
+    if (this.sendTimeout) {
+        sendTimeoutTimer = vertx.setTimer(this.sendTimeout, function() {
+            sendTimeoutTimer = undefined;
+            // "close" triggers the emittance of the "end" event and destroys
+            // the client
+            smtpClient.close();
+        });
+    }
+    
     // =======================
     // Set exception handlers
     // =======================
@@ -343,8 +446,9 @@ Mailer.prototype.send = function (sendData, callback) {
     // Sets the "send error", which has a "toString" method
     // and optionally the properties "name", "data", "code".
     smtpClient.on('error', function(err){
-        // "close" triggers the "end" handler
         sendError = err;
+        // "close" triggers the emittance of the "end" event and destroys
+        // the client
         smtpClient.close();
     });
 
@@ -352,52 +456,36 @@ Mailer.prototype.send = function (sendData, callback) {
         sendResult.rcptFailedAdrs = failedAddresses;
     });
 
+    // Optionally set a debug handler
+    if (this.debug) {
+        smtpClient.on('debug', function (msg) {
+            self.emit("debug", msg);
+        });
+    }
+
     // ==========================
     // Set control flow handlers
     // ==========================
+    addressInfo = {
+            'fromAddr': fromAddr,
+            'toAddrs': toAddrs,
+            'ccAddrs': ccAddrs,
+            'bccAddrs': bccAddrs
+    };
+    
     smtpClient.once('idle', function () {
-        var i, l;				// Loop vars
-        var envelopeToAddrs;	// Array of "to" addresses for the envelope
-
-        envelopeToAddrs = [];
-        for (i = 0, l = toAddrs.length; i &lt; l; i++) {
-            envelopeToAddrs.push(toAddrs[i].getAddress());
-        }
-        for (i = 0, l = ccAddrs.length; i &lt; l; i++) {
-            envelopeToAddrs.push(ccAddrs[i].getAddress());
-        }
-        for (i = 0, l = bccAddrs.length; i &lt; l; i++) {
-            envelopeToAddrs.push(bccAddrs[i].getAddress());
-        }
-
-        smtpClient.useEnvelope({
-            from: fromAddr.getAddress(),
-            to: envelopeToAddrs
-        });
+        sendEnvelope(smtpClient, addressInfo);
     });
 
     smtpClient.on('message', function () {
-        var message;	// The complete message: Header and body
-        var msgBao;		// Intermediate ByteArrayOutputStream for the message
-
         try {
-            message =new MimeMessage(MailSession.getInstance(System.getProperties()));
-            message.setFrom(fromAddr);
-            message.setRecipients(RecipientType.TO, toAddrs);
-            if (ccAddrs.length > 0) {
-                message.setRecipients(RecipientType.CC, ccAddrs);
-            }
-            if (bccAddrs.length > 0) {
-                message.setRecipients(RecipientType.BCC, bccAddrs);
-            }
-            message.setSubject(sendData.subject, 'utf-8');
-            message.setText(sendData.body || '', 'utf-8', sendContentSubtype);
-            message.setSentDate(new JavaDate());
-            msgBao = new ByteArrayOutputStream();
-            message.writeTo(msgBao);
-            smtpClient.end(new vertx.Buffer(msgBao.toByteArray()));
+            // Send the message
+            smtpClient.end(composeMsg(addressInfo, sendData,
+                    sendContentSubtype));
         } catch (msgError) {
             sendError = msgError;
+            // "close" triggers the emittance of the "end" event and destroys
+            // the client
             smtpClient.close();
         }
     });
@@ -413,9 +501,284 @@ Mailer.prototype.send = function (sendData, callback) {
     });
 
     smtpClient.on('end', function () {
+        if (sendTimeoutTimer) {
+            vertx.cancelTimer(sendTimeoutTimer);
+        }
         callback(sendError, sendResult);
     });
 }; // END: send()
+
+/**
+ * Send email messages sequentially over a single TCP connection.&lt;br>
+ * &lt;br>
+ * This method opens a new connection to the server, if no connection is
+ * established. Subsequent calls to this method reuse the same connection.
+ * After all calls have been made, the &lt;code>sendSeqEnd&lt;/code> method must be
+ * called to close the connection.&lt;br>
+ * &lt;br>
+ * &lt;b>NOTE 1&lt;/b>&lt;br>
+ * The user of this method is responsible for ensuring, that subsequent calls
+ * only happen, after the previous call has finished successfully.&lt;br>
+ * &lt;br>
+ * &lt;b>NOTE 2&lt;/b>&lt;br>
+ * When the callback receives an error, you can assume that the connection is
+ * destroyed and any subsequent call will try to create a new connection.&lt;br>
+ * &lt;br>
+ * The parameters and the return value are the same as for the
+ * &lt;code>send&lt;/code> method.
+ */
+Mailer.prototype.sendSeq = function (sendData, callback) {
+    var smtpClient;         // Underlying SMTP client
+    var mailOpts;           // Mail client options
+    var fromAddr;           // "from" address as a Java object
+    var toAddrs;            // Array of "to" addresses as Java objects
+    var ccAddrs;            // Array of "cc" addresses as Java objects
+    var bccAddrs;           // Array of "bcc" addresses as Java objects
+    var addressInfo;        // Address info for the message
+    var sendError;          // Error in the course of the send method
+    var sendResult;         // Result of send operation
+    var sendContentSubtype; // MIME subtype for this send request
+    var sendTimeoutTimer;   // Timer for send timeouts
+    var self = this;
+
+    /*
+     * Reusable function to return and error
+     */
+    function returnError (err) {
+        if (sendTimeoutTimer) {
+            vertx.cancelTimer(sendTimeoutTimer);
+        }
+        if (smtpClient) {
+            try {
+                smtpClient.close();
+            } catch (ignore) {}
+            smtpClient = undefined;
+        }
+        callback(err);
+    } // END: returnError
+    
+    // ===========
+    // Initialize
+    // ===========
+
+    // Should be allowed to be called without callback
+    callback = callback || function () {return;};
+    sendError = null;
+    sendResult = {};
+
+    // ================
+    // Check arguments
+    // ================
+    if (!sendData) {
+        returnError(new Error('a-mailer.send: Missing send data'));
+        return;
+    }
+    if (!sendData.from) {
+        returnError(new Error('a-mailer.send: Missing "from" field'));
+        return;
+    }
+    if (!sendData.to) {
+        returnError(new Error('a-mailer.send: Missing "to" field'));
+        return;
+    }
+    if (!sendData.subject) {
+        returnError(new Error('a-mailer.send: Missing "subject" field'));
+        return;
+    }
+
+    sendContentSubtype = this.textContentSubtype;
+    if (sendData.content_type === 'text/html') {
+        sendContentSubtype = 'html';
+    } else if (sendData.content_type === 'text/plain') {
+        sendContentSubtype = 'plain';
+    }
+
+    // ============================
+    // Check sender and recipients
+    // ============================
+    try {
+        fromAddr = InternetAddress.parse(sendData.from)[0];
+    } catch (parseErr) {
+        returnError(new Error('a-mailer.send: Illegal "from" address: ' +
+                parseErr.toString()));
+        return;
+    }
+    try {
+        toAddrs = parseAddresses(sendData.to);
+        if (toAddrs.length === 0) {
+            throw new Error('Missing "to" address');
+        }
+    } catch (parseErr) {
+        returnError(new Error('a-mailer.send: Illegal "to" address: ' +
+                parseErr.toString()));
+        return;     
+    }
+    try {
+        ccAddrs = parseAddresses(sendData.cc || []);
+    } catch (parseErr) {
+        returnError(new Error('a-mailer.send: Illegal "cc" address: ' +
+                parseErr.toString()));
+        return;     
+    }
+    try {
+        bccAddrs = parseAddresses(sendData.bcc || []);
+    } catch (parseErr) {
+        returnError(new Error('a-mailer.send: Illegal "bcc" address: ' +
+                parseErr.toString()));
+        return;     
+    }
+    
+    // ===================
+    // Set up mail client
+    // ===================
+    if (this._smtpClient) {
+        // We already have a client
+        if (!this._isIdle) {
+            // If not idle, "sendSeq" was called before its callback
+            // returned with success => error
+            returnError(new Error('a-mailer.send: SMTP client not idle'));
+            return;
+        }
+        
+        this._isIdle = false;
+        smtpClient = this._smtpClient;
+        smtpClient.removeAllListeners();
+        
+        // By emitting the "idle" event with the "next tick" we make sure that
+        // the event handlers below are attached first
+        vertx.runOnContext(function () {
+            smtpClient.emit('idle');
+        });
+    }  else {
+        // No current client in this._smtpClient => create a new one
+        mailOpts = {
+                ignoreTLS: true
+        };
+        if (this.auth) {
+            mailOpts.auth = {};
+            mailOpts.auth.user = this.username;
+            mailOpts.auth.pass = this.password;
+            mailOpts.debug = this.debug;
+        }
+        if (this.ssl) {
+            mailOpts.secureConnection = true;
+        }
+        smtpClient = getSmtpClient(this.port, this.host, mailOpts);
+        this.emit("debug", 'Smtp client created');
+        
+        this._smtpClient = smtpClient;
+        // Set the "_isIdle" flag initially to false, so that subsequent calls
+        // to "sendSeq" return an error until the flag is set to true after
+        // sending a message
+        this._isIdle = false;
+    }
+    
+    if (this.sendTimeout) {
+        sendTimeoutTimer = vertx.setTimer(this.sendTimeout, function() {
+            sendTimeoutTimer = undefined;
+            returnError(new Error('A-Mailer: Send timeout'));
+        });
+    }
+    
+    // =======================
+    // Set exception handlers
+    // =======================
+
+    // Sets the "send error", which has a "toString" method
+    // and optionally the properties "name", "data", "code".
+    smtpClient.on('error', function(err){
+        sendError = err;
+        // "close" triggers the emittance of the "end" event and destroys
+        // the client
+        returnError(sendError);
+    });
+
+    smtpClient.on('rcptFailed', function(failedAddresses){
+        sendResult.rcptFailedAdrs = failedAddresses;
+    });
+    
+    // Optionally set a debug handler
+    if (this.debug) {
+        smtpClient.on('debug', function (msg) {
+            self.emit("debug", msg);
+        });
+    }
+    
+    // ==========================
+    // Set control flow handlers
+    // ==========================
+    addressInfo = {
+            'fromAddr': fromAddr,
+            'toAddrs': toAddrs,
+            'ccAddrs': ccAddrs,
+            'bccAddrs': bccAddrs
+    };
+    
+    smtpClient.once('idle', function () {
+        sendEnvelope(smtpClient, addressInfo);
+    });
+
+    smtpClient.on('message', function () {
+        try {
+            // Send the message
+            smtpClient.end(composeMsg(addressInfo, sendData,
+                    sendContentSubtype));
+        } catch (msgError) {
+            sendError = msgError;
+            // "close" triggers the emittance of the "end" event and destroys
+            // the client
+            returnError(sendError);
+        }
+    });
+
+    smtpClient.on('ready', function (success, response) {
+        if (!success) {
+            sendError = new Error(response);
+            // "close" triggers the emittance of the "end" event and destroys
+            // the client
+            returnError(sendError);
+            return;
+        }
+
+        // Successful server response
+        sendResult.response = response;
+        // NOTE: This handler relies on implicit implementation knowledge of
+        // the smtp client from client.js, namely: The "ready" event is
+        // always followed by an "idle" event, which is emitted, AFTER this
+        // "ready" handler has finished (by using "vertx.runOnContext(...)"
+        smtpClient.once('idle', function () {
+            if (sendTimeoutTimer) {
+                vertx.cancelTimer(sendTimeoutTimer);
+            }
+            self._isIdle = true;
+            callback(undefined, sendResult);
+        });
+    });
+
+    // NOTE
+    // We do not implement an "end" handler in this case because the callback
+    // is either triggerd by the "ready" handler in case of success or directly
+    // in case of an error
+    
+}; // END: sendSeq()
+
+/**
+ * End a sequence of messages over the same connnection.&lt;br>
+ * &lt;br>
+ * Send the QUIT command to the server and closes the connection. Note that
+ * there is no callback parameter. We do not care about server response in this
+ * case.
+ */
+Mailer.prototype.sendSeqEnd = function () {
+    if (this._smtpClient) {
+        try {
+            this._smtpClient.quit();
+        } catch (ignore) {}
+    }
+    this._smtpClient = undefined;
+}; // END: sendSeqEnd()
+
+// TODO: svn -> git
 
 //======================
 // Event Bus Connection
@@ -426,7 +789,7 @@ Mailer.prototype.send = function (sendData, callback) {
 if (container.config.address) {
     vertx.eventBus.registerHandler(container.config.address,
     function (sendDataJSON, replier) {
-        var data;       // Parsed message data
+        var data;       // Parsed send message data
         var mailer;     // mailer object to send the email with
 
         try {
@@ -438,16 +801,67 @@ if (container.config.address) {
             return;
         }
 
-        mailer = exports.getMailer(container.config);
-        mailer.send(data, function (err, result) {
-            if (err) {
-                replier(JSON.stringify({
-                    errorMsg: err.toString()
-                }));
-            } else {
-                replier(JSON.stringify(result));
+        if (data.method === 'sendSeq') {
+            // ================
+            // Method: sendSeq
+            // ================
+            if (!moduleScopeMailer) {
+                moduleScopeMailer = exports.getMailer(container.config);
+                if (moduleScopeMailer.debug && moduleScopeMailer.debugAddress) {
+                    moduleScopeMailer.on('debug', function (msg) {
+                        vertx.eventBus.publish(moduleScopeMailer.debugAddress,
+                                msg);
+                    });
+                }
             }
-        });
+            moduleScopeMailer.sendSeq(data, function (err, result) {
+                if (err) {
+                    replier(JSON.stringify({
+                        errorMsg: err.toString()
+                    }));
+                    moduleScopeMailer.removeAllListeners();
+                    moduleScopeMailer = undefined;
+                } else {
+                    replier(JSON.stringify(result));
+                }
+            });
+        } else if (data.method === 'sendSeqEnd') {
+            // ===================
+            // Method: sendSeqEnd
+            // ===================
+            if (moduleScopeMailer) {
+                moduleScopeMailer.sendSeqEnd();
+                moduleScopeMailer.removeAllListeners();
+                moduleScopeMailer = undefined;
+            }
+            replier(JSON.stringify({
+                response: 'OK'
+            }));            
+        } else if (!data.method || data.method === 'send') {
+            // =============
+            // Method: send
+            // =============
+            mailer = exports.getMailer(container.config);
+            if (mailer.debug && mailer.debugAddress) {
+                mailer.on('debug', function (msg) {
+                    vertx.eventBus.publish(mailer.debugAddress, msg);
+                });
+            }
+            mailer.send(data, function (err, result) {
+                if (err) {
+                    replier(JSON.stringify({
+                        errorMsg: err.toString()
+                    }));
+                } else {
+                    replier(JSON.stringify(result));
+                }
+                mailer.removeAllListeners();
+            });
+        } else {
+            replier(JSON.stringify({
+                errorMsg: 'No such method: ' + data.method
+            }));            
+        }
     });
 }
 </pre>
@@ -466,7 +880,7 @@ if (container.config.address) {
 					
 		<span class="jsdoc-message">
 		Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.2.0-dev</a>
-		on Thu Oct 10 2013 22:20:20 GMT+0200 (MESZ) using the <a href="https://github.com/terryweiss/docstrap">DocStrap template</a>.
+		on Wed Oct 16 2013 23:08:53 GMT+0200 (MESZ) using the <a href="https://github.com/terryweiss/docstrap">DocStrap template</a>.
 		</span>
 				</footer>
 			</div>

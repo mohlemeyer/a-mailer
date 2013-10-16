@@ -387,7 +387,7 @@ var a_mailer = require('jslibs/a-mailer/lib/a-mailer');
 var container = require('vertx/container');
 
 //==========================================================================
-QUnit.module('a-mailer.a-mailer', {
+QUnit.module('a-mailer.a-mailer.send', {
 //  ========================================================================
 	setup: function () {
 		var that = this;
@@ -726,4 +726,414 @@ test('should set "end" handler', function () {
 	
 	equal(this.fakeSmtpClient.on.getCall(4).args[0], 'end', 'Handler set for "end" event');
 	equal(typeof this.fakeSmtpClient.on.getCall(4).args[1], 'function', '"end" handler set');
+});
+
+//==========================================================================
+QUnit.module('a-mailer.a-mailer.sendSeq', {
+//  ========================================================================
+    setup: function () {
+        var that = this;
+        
+        this.fakeSmtpClient = {};
+        this.fakeGetSmtpClient = sinon.spy(function () {
+            that.fakeSmtpClient.on = sinon.spy();
+            that.fakeSmtpClient.once = sinon.spy();
+            that.fakeSmtpClient.useEnvelope = sinon.spy();
+            that.fakeSmtpClient.close = sinon.spy();
+            that.fakeSmtpClient.end = sinon.spy();
+            that.fakeSmtpClient.quit = sinon.spy();
+            return that.fakeSmtpClient;
+        });
+        a_mailer.setClientGetter(this.fakeGetSmtpClient);
+    },
+    teardown: function () {
+        
+    }
+});
+test('"sendSeq" should call callback with error on missing mandatory arguments', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+
+    mailer.sendSeq(undefined, callback);
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on missing "send data"');
+
+    callback.reset();
+    mailer.sendSeq({}, callback);
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on missing "from"');
+
+    callback.reset();
+    mailer.sendSeq({
+        from: 'abc@d.com'
+    }, callback);
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on missing "to"');
+    
+    callback.reset();
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com'
+    }, callback);
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on missing "subject"');
+});
+test('"sendSeq" should call callback with error on illegal "from" address', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'a b',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);   
+
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on illegal "from" data');
+});
+test('"sendSeq" should call callback with error on illegal "to" address', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'c d',
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);   
+
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on illegal "to" data');
+});
+test('"sendSeq" should call callback with error on one illegal "to" address of many', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: ['hij@klm.com', 'c d', 'zyx@xyz.de'],
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);   
+
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on illegal "to" data');
+});
+test('"sendSeq" should call callback with error with zero legal "to" addresses', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: [],
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);   
+
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error with zero legal "to" addresses');
+});
+test('"sendSeq" should call callback with error on illegal "cc" address', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'uvw@xy.de',
+        cc: 'c d',
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);   
+
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on illegal "cc" data');
+});
+test('"sendSeq" should call callback with error on one illegal "cc" address of many', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'uvw@xy.de',
+        cc: ['hij@klm.com', 'c d', 'zyx@xyz.de'],
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);   
+
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on illegal "cc" data');
+});
+test('"sendSeq" should call callback with error on illegal "bcc" address', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'uvw@xy.de',
+        bcc: 'c d',
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);   
+
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on illegal "bcc" data');
+});
+test('"sendSeq" should call callback with error on one illegal "bcc" address of many', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'uvw@xy.de',
+        bcc: ['hij@klm.com', 'c d', 'zyx@xyz.de'],
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);   
+
+    ok(callback.lastCall.args[0] instanceof Error, '"sendSeq" callback with error on illegal "bcc" data');
+});
+test('should call method to get a new SMTP client', function () {
+    var mailer = a_mailer.getMailer();
+    
+    ok(!this.fakeGetSmtpClient.called, 'getSmtpClient initially not called');
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    }); 
+    ok(this.fakeGetSmtpClient.calledOnce, 'getSmtpClient not called once after sendSeq');
+    equal(this.fakeGetSmtpClient.firstCall.args[0], container.config.port || 25, 'Called with configured port');
+    equal(this.fakeGetSmtpClient.firstCall.args[1], container.config.host || 'localhost', 'Called with configured host');
+    equal(this.fakeGetSmtpClient.firstCall.args[2].ignoreTLS, true, 'Called with "ignoreTLS"');
+});
+test('should set "error" handler on smtp client', function () {
+    var mailer = a_mailer.getMailer();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    });
+    
+    ok(this.fakeSmtpClient.on.called, 'Set handler method called');
+    equal(this.fakeSmtpClient.on.firstCall.args[0], 'error', 'Handler set for "error" event');
+    equal(typeof this.fakeSmtpClient.on.firstCall.args[1], 'function', '"error" handler set');
+});
+test('"error" handler should close the smtp client', function () {
+    var mailer = a_mailer.getMailer();
+    var sendCallback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    }, sendCallback);
+
+    var errorHandler = this.fakeSmtpClient.on.firstCall.args[1];
+    errorHandler();
+    ok(this.fakeSmtpClient.close.calledOnce, 'smtp client closed by error handler');
+});
+test('"error" handler should call callback with error', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);
+    
+    var errorHandler = this.fakeSmtpClient.on.firstCall.args[1];
+    errorHandler(new Error('errorMsg'));
+
+    ok(callback.calledOnce, 'callback called by "error" handler');
+    ok(callback.firstCall.args[0], 'callback called with error');
+    ok(callback.firstCall.args[0].toString().indexOf('errorMsg') > -1, 'error response contains expected message');
+});
+test('should set "receipt failed" handler on smtp client', function () {
+    var mailer = a_mailer.getMailer();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    });
+    
+    equal(this.fakeSmtpClient.on.secondCall.args[0], 'rcptFailed', 'Handler set for "rcptFailed" event');
+    equal(typeof this.fakeSmtpClient.on.secondCall.args[1], 'function', '"rcptFailed" handler set');
+});
+test('should set "idle" handler once', function () {
+    var mailer = a_mailer.getMailer();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    });
+
+    equal(this.fakeSmtpClient.once.firstCall.args[0], 'idle', 'Handler set for "idle" event');
+    equal(typeof this.fakeSmtpClient.once.firstCall.args[1], 'function', '"idle" handler set');
+});
+test('"idle" handler should call "useEnvelope" with "from" and "to"', function () {
+    var mailer = a_mailer.getMailer();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    });
+
+    var idleHandler = this.fakeSmtpClient.once.firstCall.args[1];
+    idleHandler();
+    
+    deepEqual(this.fakeSmtpClient.useEnvelope.firstCall.args[0],
+            { from: 'abc@d.com', to: ['bde@e.com']},
+            '"useEnvelope" called with "from" and "to"');
+});
+test('"idle" handler should call "useEnvelope" with "from", "to", "cc" and "bcc"', function () {
+    var mailer = a_mailer.getMailer();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: ['to1@zzz.com', 'To Two <to2@zzz.com>', 'Name of to three <to3@zzz.com>'],
+        cc: 'C and C <cc1@zzz.com>',
+        bcc: ['Blind Carbon Copy <bcc1@zzz.com>', 'bcc2@zzz.com'],
+        subject: 'Subject',
+        body: 'bodytext'
+    });
+
+    var idleHandler = this.fakeSmtpClient.once.firstCall.args[1];
+    idleHandler();
+    
+    deepEqual(this.fakeSmtpClient.useEnvelope.firstCall.args[0],
+            { from: 'abc@d.com', to: ['to1@zzz.com', 'to2@zzz.com',
+                                      'to3@zzz.com', 'cc1@zzz.com',
+                                      'bcc1@zzz.com', 'bcc2@zzz.com']},
+            '"useEnvelope" called with "from", "to", "cc" and "bcc"');
+});
+test('should set "message" handler', function () {
+    var mailer = a_mailer.getMailer();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    });
+    
+    equal(this.fakeSmtpClient.on.thirdCall.args[0], 'message', 'Handler set for "message" event');
+    equal(typeof this.fakeSmtpClient.on.thirdCall.args[1], 'function', '"message" handler set');
+});
+test('"message" handler should call "end" with arguments', function () {
+    var mailer = a_mailer.getMailer();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'SubjectText',
+        body: 'bodytext'
+    });
+
+    var messageHandler = this.fakeSmtpClient.on.thirdCall.args[1];
+    messageHandler();
+    
+    ok(this.fakeSmtpClient.end.calledOnce, '"end" called by "message" handler');
+    
+    var endArg = this.fakeSmtpClient.end.firstCall.args[0].toString();
+    
+    ok(/From:\sabc@d.com/.test(endArg), 'Contains correct "From" line');
+    ok(/To:\sbde@e.com/.test(endArg), 'Contains correct "To" line');
+    ok(/Subject:\sSubjectText/.test(endArg), 'Contains correct "Subject" line');
+    ok(/bodytext/.test(endArg), 'Contains correct "body" line');
+});
+test('should set "ready" handler', function () {
+    var mailer = a_mailer.getMailer();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    });
+    
+    equal(this.fakeSmtpClient.on.getCall(3).args[0], 'ready', 'Handler set for "ready" event');
+    equal(typeof this.fakeSmtpClient.on.getCall(3).args[1], 'function', '"ready" handler set');
+});
+test('"ready" handler should call callback with error, when not called with success', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);
+    
+    this.fakeSmtpClient.once.reset();
+    var readyHandler = this.fakeSmtpClient.on.getCall(3).args[1];
+    readyHandler(false, 'responseError');
+
+    ok(callback.calledOnce, 'callback called by "ready" handler');
+    ok(callback.firstCall.args[0], 'callback called with error');
+    ok(callback.firstCall.args[0].toString().indexOf('responseError') > -1, 'error response contains expected message');
+});
+test('"ready" handler should set "idle" handler once, when called with success', function () {
+    var mailer = a_mailer.getMailer();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    });
+    
+    this.fakeSmtpClient.once.reset();
+    var readyHandler = this.fakeSmtpClient.on.getCall(3).args[1];
+    readyHandler(true, 'responseSuccess');
+
+    ok(this.fakeSmtpClient.once.calledOnce, '"once" called by "ready" handler');
+    equal(this.fakeSmtpClient.once.firstCall.args[0], 'idle', 'Handler set for "idle" event');
+    equal(typeof this.fakeSmtpClient.once.firstCall.args[1], 'function', '"idle" handler set');
+});
+test('"idle" handler should call callback without error', function () {
+    var mailer = a_mailer.getMailer();
+    var callback = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback);
+    
+    this.fakeSmtpClient.once.reset();
+    var readyHandler = this.fakeSmtpClient.on.getCall(3).args[1];
+    readyHandler(true, 'responseSuccess');
+    
+    var idleHandler = this.fakeSmtpClient.once.firstCall.args[1];
+    idleHandler();
+ 
+    ok(callback.calledOnce, 'callback called by "idle" handler');
+    ok(!callback.firstCall.args[0], '"idle" handler called without error');
+    equal(callback.firstCall.args[1].response, 'responseSuccess', '"idle" handler called with expected response');
+});
+test('subsequent calls to sendSeq should lead to an error', function () {
+    var mailer = a_mailer.getMailer();
+    var callback1 = sinon.spy();
+    var callback2 = sinon.spy();
+    
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback1);
+
+    mailer.sendSeq({
+        from: 'abc@d.com',
+        to: 'bde@e.com',
+        subject: 'Subject',
+        body: 'bodytext'
+    }, callback2);
+
+    ok(callback2.calledOnce, 'callback on second call called');
+    ok(callback2.firstCall.args[0], 'callback on second call called with error');
 });
