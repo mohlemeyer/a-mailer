@@ -68,10 +68,10 @@ for the communication stream between client and server.
 Debug messages are simple strings, not JSON structures.
 
 
-### Sending an email
+### Sending an Email Message
  
-To send an email, send a JSON message to the event bus address specified in the
-configuration above with the following content:
+To simply send an email, send a JSON message to the event bus address specified
+in the configuration above with the following content:
 
 ```javascript
 {
@@ -85,8 +85,12 @@ configuration above with the following content:
 }
 ```
 
+This will open a TCP connection, send the message via SMTP and close the
+connection afterwards.
+
 On error or after the email has been sent, the mailer responds with a JSON
 message on the event bus, which contains the following data:
+
 ```javascript
 {
     "errorMsg": <If the email could not be delivered, this property contains the error message>,
@@ -94,6 +98,50 @@ message on the event bus, which contains the following data:
     "rcptFailedAdrs": <JSON array of email recipient addresses, which were rejected by the server>
 }
 ```
+
+#### Example
+
+A JavaScript usage example for sending a single email via the event bus can be
+found in `jslibs/a-mailer/examples/a-mailer/sendMailEB.js`.
+
+
+### Reusing the Connection
+
+When there is the need to send multiple messages in a batch, A-Mailer can
+reuse an established TCP connection, reducing the overhead for opening/closing
+connections.
+
+In this case the JSON event bus message has to include an additional `method`
+property with the value of `sendSeq`, i.e.
+
+```javascript
+{
+    "from": <Sender email address in RFC822 format {string}>,
+    "to": <Single TO recipient address {string} or a JSON array of addresses>,
+    "cc": <Single CC recipient address {string} or a JSON array of addresses>,
+    "bcc": <Single BCC recipient address {string} or a JSON array of addresses>,
+    "subject": <Email subject {string}>,
+    "body": <Email body {string}>,
+    "content_type": <email body MIME type; if specified overwrites the MIME type of the configuration>,
+    "method": <method to call {string}: send, sendSeq or sendSeqEnd>
+}
+```
+
+After all messages have been sent, the connection has to be closed explicitly
+by sending a JSON event bus message with a single `method` property and value
+`sendSeqEnd`, i.e.
+
+```javascript
+{
+    "method": "sendSeqEnd"
+}
+```
+
+#### Example
+
+A connection reuse example for sending multiple email messages over the same
+connection in JavaScript can be found in 
+`jslibs/a-mailer/examples/a-mailer/sendSeqEB.js`.
 
 ### Debugging
 
@@ -106,12 +154,7 @@ vertx.eventBus.registerHandler('mailerDbgOut', function (msg) {
 });
 ```
 
-#### Example
-
-A JavaScript usage example of the Vert.x module can be found in
-`jslibs/a-mailer/examples/a-mailer/sendMailEB.js`.
-
-#### A Note on Character Encoding
+### A Note on Character Encoding
 The email subject and body will always be encoded using UTF-8. If you use the
 module from JavaScript as a Vert.x module or a CommonJS module and include
 non-US characters, make sure to encode the source code file in UTF-8, too.
@@ -145,7 +188,10 @@ var mailer = aMailer.getMailer({
 });
 ```
 
-Mail can then be sent by calling the `send` method of the mailer object:
+### Sending an Email Message
+ 
+A single email message can then be sent by calling the `send` method of the
+mailer object:
 
 ```javascript
 function replyHandler (err, reply) {
@@ -169,6 +215,27 @@ mailer.send(message, replyHandler);
 of the use as a Vert.x module. More information might be obtained from the
 JSDoc documentation under `jslibs/a-mailer/jsDocOut`.
 
+#### Example
+
+A usage example for sending a single email with the CommonJS module can be
+found in `jslibs/a-mailer/examples/a-mailer/sendMailCommonJS.js`.
+
+### Reusing the Connection
+
+The CommonJS module also provides the ability to send multiple messages over
+the same TCP connection to reduce the overhead for opening/closing
+connections.
+
+In this case the `sendSeq` method has to be used instead of the `send` method
+and the connection has to be explicitly closed after all messages have been sent
+by calling the `sendSeqEnd` method.
+
+#### Example
+
+An CommonJS example for reusing the connection when sending multiple email
+messages can be found in 
+`jslibs/a-mailer/examples/a-mailer/sendSeqCommonJS.js`.
+
 ### Debugging
 
 With `debug` set to true, the mailer becomes an
@@ -180,11 +247,6 @@ mailer.on('debug', function (msg) {
     console.log('DEBUG: ' + msg);
 });
 ```
-
-#### Example
-
-A usage example of the CommonJS module can be found in
-`jslibs/a-mailer/examples/a-mailer/sendMailCommonJS.js`.
 
 ## Simple SMTP Client
 
@@ -354,7 +416,7 @@ fact that Vert.x currenty does not provide a way to *upgrade* an existing
 unsecured tcp connection to a TLS connection I did not find a way to implement
 STARTTLS support. This means that, unless the communication already starts
 encrypted (as is the case with GMail on port 465), all communication between
-client and server is performed as clear text.
+client and server is performed in clear text.
 * **No XOauth (2) support**
 * **No support for CRAM-MD5 authentication**
 
