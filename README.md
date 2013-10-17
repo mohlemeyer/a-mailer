@@ -127,6 +127,9 @@ property with the value of `sendSeq`, i.e.
 }
 ```
 
+Note that it will result in an error, when the `sendSeq` method is used to send
+an email before the previous `sendSeq` call has returned.
+
 After all messages have been sent, the connection has to be closed explicitly
 by sending a JSON event bus message with a single `method` property and value
 `sendSeqEnd`, i.e.
@@ -229,6 +232,9 @@ connections.
 In this case the `sendSeq` method has to be used instead of the `send` method
 and the connection has to be explicitly closed after all messages have been sent
 by calling the `sendSeqEnd` method.
+
+Note that a subsequent `sendSeq` call must not be initiated on the same mailer
+object before the previous `sendSeq` call has returned successfullly.
 
 #### Example
 
