@@ -558,6 +558,14 @@ test('should call method to get a new SMTP client', function () {
 	equal(this.fakeGetSmtpClient.firstCall.args[1], container.config.host || 'localhost', 'Called with configured host');
 	equal(this.fakeGetSmtpClient.firstCall.args[2].ignoreTLS, true, 'Called with "ignoreTLS"');
 });
+
+// ============================================================================
+// Tests for event handlers
+//
+// NOTE: Although the sequence of setting the handlers does not affect the
+// program logic, the unit tests still rely on a certain order to ensure that
+// the event handlers get called with the right arguments.
+// ============================================================================
 test('should set error handler on smtp client', function () {
     var mailer = a_mailer.getMailer();
     
@@ -897,6 +905,14 @@ test('should call method to get a new SMTP client', function () {
     equal(this.fakeGetSmtpClient.firstCall.args[1], container.config.host || 'localhost', 'Called with configured host');
     equal(this.fakeGetSmtpClient.firstCall.args[2].ignoreTLS, true, 'Called with "ignoreTLS"');
 });
+
+//============================================================================
+// Tests for event handlers
+//
+// NOTE: Although the sequence of setting the handlers does not affect the
+// program logic, the unit tests still rely on a certain order to ensure that
+// the event handlers get called with the right arguments.
+//============================================================================
 test('should set "error" handler on smtp client', function () {
     var mailer = a_mailer.getMailer();
     

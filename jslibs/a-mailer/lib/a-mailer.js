@@ -31,8 +31,10 @@
  * <li><code>username</code> {string} Authentication user.</li>
  * <li><code>password</code> {string} Authentication password.</li>
  * <li><code>content_type</code> {string} Default MIME type/subtype for the
- * email body; can be set to <code>text/html</code>. Every other or no value
- * will be interpreted as <code>text/plain</code>.</li>
+ * main email body; can be set to <code>text/html</code>. Every other or no
+ * value will be interpreted as <code>text/plain</code>. Character set encoding
+ * specification as in <code>text/plain; charset=Cp1252</code> is NOT allowed
+ * here, UTF-8 is always assumed for the main body.</li>
  * <li><code>sendTimeout</code> Max. time in ms for a <code>send</code>
  * or <code>sendSeq</code> operation to finish. Otherwise will result in an
  * error.</li>
@@ -68,12 +70,17 @@ var getSmtpClient = require('jslibs/a-mailer/lib/client');
 
 //Required java classes/packages
 var MimeMessage = Packages.javax.mail.internet.MimeMessage;
+var MimeMultipart = Packages.javax.mail.internet.MimeMultipart;
+var MimeBodyPart = Packages.javax.mail.internet.MimeBodyPart;
+var ByteArrayDataSource = Packages.javax.mail.util.ByteArrayDataSource;
+var DataHandler = Packages.javax.activation.DataHandler;
 var MailSession = Packages.javax.mail.Session;
 var System = Packages.java.lang.System;
 var InternetAddress = Packages.javax.mail.internet.InternetAddress;
 var RecipientType = Packages.javax.mail.Message.RecipientType;
 var ByteArrayOutputStream = Packages.java.io.ByteArrayOutputStream;
 var JavaDate = Packages.java.util.Date;
+var DatatypeConverter = Packages.javax.xml.bind.DatatypeConverter;
 
 // Module scope variables
 var moduleScopeMailer;  // Reusable mailer on module scope for "sendSeq" method
@@ -194,15 +201,57 @@ function sendEnvelope (client, addrInfo) {
  * Reusable function for "send" and "sendSeq"
  * 
  * @param {object} addrInfo Address info: fromAddr, toAddrs, ccAddrs, bccAddrs
- * @param {object} sendData Send data object with subject and body text
+ * @param {object} sendData Send data object with subject, body text and
+ * attachments
  * @param {string} textContentSubtype "plain" or "html" for MIME types
  * "text/plain" or "text/html" respectively
  * @returns {Buffer} The message in a Vert.x buffer
  */
 function composeMsg(addrInfo, sendData, textContentSubtype) {
-    var message;    // Message to compose
-    var msgBao;     // ByteArrayOutputStream for the messge
+    var message;        // Message to compose
+    var mimeMultipart;  // The multipart body of the message
+    var textBodyPart;   // Text part of the message
+    var msgBao;         // ByteArrayOutputStream for the messge
+    var attachment;     // Pointer to current attachment
+    var attachmentBuf;  // Current attachment as a vertx buffer
+    var dataSource;     // Attachment as a ByteArrayDataSource
+    var bodyPart;       // Attachment in a MimeBodyPart
+    var i;              // Loop var
 
+    // Create the mime multi part
+    mimeMultipart = new MimeMultipart();
+
+    // Create the text body part and add it to the multi part
+    textBodyPart = new MimeBodyPart();
+    textBodyPart.setText(sendData.body || '', 'utf-8', textContentSubtype);
+    mimeMultipart.addBodyPart(textBodyPart);
+
+    // Create the attachment body parts and add them to the multi part
+    if (sendData.attachments && sendData.attachments.length > 0) {
+        for (i = 0; i < sendData.attachments.length; i++) {
+            attachment = sendData.attachments[i];
+            if (attachment.data) {
+                if (attachment.data instanceof vertx.Buffer) {
+                    attachmentBuf = attachment.data;
+                } else {
+                    // If the attachment data is not a Vert.x buffer we assume
+                    // that it is a string or it can be converted to a string
+                    attachmentBuf =
+                        new vertx.Buffer(DatatypeConverter.parseBase64Binary(
+                            attachment.data.toString()));
+                }
+                dataSource =
+                    new ByteArrayDataSource(attachmentBuf.getBytes(),
+                        attachment.mimeType || 'text/plain');
+                bodyPart = new MimeBodyPart();
+                bodyPart.setDataHandler(new DataHandler(dataSource));
+                bodyPart.setFileName(attachment.fileName || 'attachment' + i);
+                mimeMultipart.addBodyPart(bodyPart);
+            }
+        }
+    }
+    
+    // Create the MIME message
     message = new MimeMessage(MailSession.getInstance(System.getProperties()));
     message.setFrom(addrInfo.fromAddr);
     message.setRecipients(RecipientType.TO, addrInfo.toAddrs);
@@ -213,8 +262,10 @@ function composeMsg(addrInfo, sendData, textContentSubtype) {
         message.setRecipients(RecipientType.BCC, addrInfo.bccAddrs);
     }
     message.setSubject(sendData.subject, 'utf-8');
-    message.setText(sendData.body || '', 'utf-8', textContentSubtype);
     message.setSentDate(new JavaDate());
+    message.setContent(mimeMultipart);
+    
+    // Write the message to an in-memory structure
     msgBao = new ByteArrayOutputStream();
     message.writeTo(msgBao);
     
@@ -234,10 +285,23 @@ function composeMsg(addrInfo, sendData, textContentSubtype) {
  * a string or an array of addresses
  * @param {string} sendData.subject Email subject
  * @param {string} [sendData.body=''] Email body
- * @param {string} [sendData.content_type] MIME type for this send request;
- * either <code>text/plain</code> or <code>text/html</code>. If otherwise
+ * @param {string} [sendData.content_type] MIME type for the "main" body of the
+ * email; either <code>text/plain</code> or <code>text/html</code>. If otherwise
  * specified or not specified at all the configured MIME type for the module
- * will be used as the default value.
+ * will be used as the default value. Character set encoding specification as
+ * in <code>text/plain; charset=Cp1252</code> is NOT allowed here, UTF-8 is
+ * always assumed for the main body.
+ * @param {array} [sendData.attachments] Multiple attachments in an array; each
+ * array entry is an object with three properties:
+ * <ul>
+ * <li><code>data</code>: The binary attachment data, either in a Vert.x Buffer
+ * or as a base64 encoded string.</li>
+ * <li><code>mimeType</code>: MIME type of the attachment data; should include
+ * a character set encoding specification for text MIME types, e.g.
+ * <code>text/plain; charset=utf-8</code></li>
+ * <li><code>fileName</code>: File name for the attachment inside of the
+ * email</li>
+ * </ul> 
  * @param {function} [callback] Callback function; called after the email is
  * sent or when an error occurs. The first argument is either an error object
  * or null if everything went ok. In case of success the second argument is
@@ -359,6 +423,16 @@ Mailer.prototype.send = function (sendData, callback) {
             smtpClient.close();
         });
     }
+
+    // ========================================================================
+    // Set event handlers
+    //
+    // NOTE: The sequence of setting the handlers below does not affect the
+    // program logic, BUT changing the order will make the unit tests fail,
+    // because those tests rely on a certain order. This is kind of stupid,
+    // but I did not find a different way to ensure that the event handlers
+    // get called with the right arguments.
+    // ========================================================================
     
     // =======================
     // Set exception handlers
@@ -601,6 +675,16 @@ Mailer.prototype.sendSeq = function (sendData, callback) {
         });
     }
     
+    // ========================================================================
+    // Set event handlers
+    //
+    // NOTE: The sequence of setting the handlers below does not affect the
+    // program logic, BUT changing the order will make the unit tests fail,
+    // because those tests rely on a certain order. This is kind of stupid,
+    // but I did not find a different way to ensure that the event handlers
+    // get called with the right arguments.
+    // ========================================================================
+
     // =======================
     // Set exception handlers
     // =======================

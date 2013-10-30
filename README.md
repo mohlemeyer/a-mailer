@@ -51,7 +51,9 @@ The JSON config file might contain the following options
     "auth": <authentication indicator {boolean}; set to true if authentication is required; default is false>,
     "username": <authentication user {string}>,
     "password": <authentication password {string}>,
-    "content_type": <email body default MIME type: "text/plain" or "text/html" allowed; default is "text/plain">,
+    "content_type": <email body default MIME type: "text/plain" or "text/html" allowed; default is "text/plain";
+                     Character set encoding specification as in "text/plain; charset=Cp1252" is NOT allowed
+                     here, UTF-8 is always assumed for the main body>,
     "sendTimeout": <max. time in ms for a send or sendSeq operation to finish; will otherwise result in an error>,
     "debug": <debug indicator {boolean}; if true, debug messages will be published to the event bus>,
     "debugAddress": <event bus address {string} to which debug output will be published>
@@ -77,11 +79,15 @@ in the configuration above with the following content:
 {
     "from": <Sender email address in RFC822 format {string}>,
     "to": <Single TO recipient address {string} or a JSON array of addresses>,
-    "cc": <Single CC recipient address {string} or a JSON array of addresses>,
-    "bcc": <Single BCC recipient address {string} or a JSON array of addresses>,
+    "cc": <optional: Single CC recipient address {string} or a JSON array of addresses>,
+    "bcc": <optional: Single BCC recipient address {string} or a JSON array of addresses>,
     "subject": <Email subject {string}>,
     "body": <Email body {string}>,
-    "content_type": <email body MIME type; if specified overwrites the MIME type of the configuration>
+    "content_type": <optional: Email body MIME type; if specified overwrites the MIME type of the configuration;
+                     "text/plain" or "text/html" allowed; default is "text/plain"; Character set encoding
+                     specification as in "text/plain; charset=Cp1252" is NOT allowed here,
+                     UTF-8 is always assumed for the main body>,
+    "attachments": <optional: Array of attachment objects>
 }
 ```
 
@@ -96,6 +102,19 @@ message on the event bus, which contains the following data:
     "errorMsg": <If the email could not be delivered, this property contains the error message>,
     "response": <The final server response in case of success>
     "rcptFailedAdrs": <JSON array of email recipient addresses, which were rejected by the server>
+}
+```
+
+#### Sending Attachments
+
+Each JSON attachment object must adhere to the following structure:
+
+```javascript
+{
+    "data": <The binary attachment data as a base64 encoded string>,
+    "mimeType": <MIME type of the attachment data, e.g. "application/pdf";
+                 should include a character set encoding specification for text MIME types, e.g. "text/plain; charset=utf-8">
+    "fileName": <File name for the attachment inside of the email>
 }
 ```
 
@@ -123,6 +142,7 @@ property with the value of `sendSeq`, i.e.
     "subject": <Email subject {string}>,
     "body": <Email body {string}>,
     "content_type": <email body MIME type; if specified overwrites the MIME type of the configuration>,
+    "attachments": <optional: Array of attachment objects>,
     "method": <method to call {string}: send, sendSeq or sendSeqEnd>
 }
 ```
@@ -158,10 +178,10 @@ vertx.eventBus.registerHandler('mailerDbgOut', function (msg) {
 ```
 
 ### A Note on Character Encoding
-The email subject and body will always be encoded using UTF-8. If you use the
-module from JavaScript as a Vert.x module or a CommonJS module and include
-non-US characters, make sure to encode the source code file in UTF-8, too.
-Otherwise your email content might get mangled.
+The email subject and main text or HTML body will always be encoded using UTF-8.
+If you use the module from JavaScript as a Vert.x module or a CommonJS module
+and include non-US characters, make sure to encode the source code file in
+UTF-8, too. Otherwise your email content might/will get mangled.
 
 ## A-Mailer as a CommonJS Module
 

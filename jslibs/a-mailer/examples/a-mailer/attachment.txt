@@ -1,0 +1,6 @@
+This is a text attachment.
+
+Make sure the encoding of this file matches the MIME type specified when
+attaching the data to the email in your code.
+
+Here are some umlauts to test: ÄÖÜß
