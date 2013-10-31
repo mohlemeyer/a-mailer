@@ -5,6 +5,8 @@ var EventEmitter = require("jslibs/a-mailer/thirdPartyDeps/eventemitter2/eventem
     vertx = require("vertx");
     // xoauth2 = require("xoauth2")
 
+var DatatypeConverter = Packages.javax.xml.bind.DatatypeConverter;
+
 // "Simulate" setTimeout, clearTimeout
 function setTimeout (f, t) { vertx.setTimer(t, f); };
 function clearTimeout(id) { if (id) { vertx.cancelTimer(id); }};
@@ -583,7 +585,7 @@ SMTPClient.prototype._authenticateUser = function(){
             return;
         case "PLAIN":
             this._currentAction = this._actionAUTHComplete;
-            this.sendCommand("AUTH PLAIN "+(new Packages.sun.misc.BASE64Encoder()).encode((new vertx.Buffer(
+            this.sendCommand("AUTH PLAIN " + DatatypeConverter.printBase64Binary((new vertx.Buffer(
                     //this.options.auth.user+"\u0000"+
                     "\u0000"+ // skip authorization identity as it causes problems with some servers
                     this.options.auth.user+"\u0000"+
@@ -734,7 +736,7 @@ SMTPClient.prototype._actionAUTH_LOGIN_USER = function(str){
         return;
     }
     this._currentAction = this._actionAUTH_LOGIN_PASS;
-    this.sendCommand('' + (new Packages.sun.misc.BASE64Encoder()).encode((new vertx.Buffer(
+    this.sendCommand('' + DatatypeConverter.printBase64Binary((new vertx.Buffer(
     		this.options.auth.user, "utf-8")).getBytes()));
 };
 
@@ -753,7 +755,7 @@ SMTPClient.prototype._actionAUTH_LOGIN_PASS = function(str){
         return;
     }
     this._currentAction = this._actionAUTHComplete;
-    this.sendCommand('' + (new Packages.sun.misc.BASE64Encoder()).encode((new vertx.Buffer(this.options.auth.pass, "utf-8")).getBytes()));
+    this.sendCommand('' + DatatypeConverter.printBase64Binary((new vertx.Buffer(this.options.auth.pass, "utf-8")).getBytes()));
 };
 
 /**
