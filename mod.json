@@ -5,5 +5,5 @@
 	"licenses": ["MIT"],
 	"keywords": ["email client","email","mail","SMTP"],
 	"main": "jslibs/a-mailer/starter.js",
-	"includes": "mohlemeyer~vertxQunitSinon~0.0.2"
+	"includes": "mohlemeyer~vertxQunitSinon~0.0.3"
 }

@@ -6,6 +6,8 @@
  *
  * Copyright (c) 2013 Matthias Ohlemeyer
  */
+var vertx = require('vertx');
+require('jslibs/qunit/qunit/qunitContext')(this);
 var getSmtpClient = require('jslibs/a-mailer/lib/client');
 
 //==========================================================================
