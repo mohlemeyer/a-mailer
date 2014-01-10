@@ -401,25 +401,28 @@ Mailer.prototype.send = function (sendData, callback) {
     // Set up mail client
     // ===================
     mailOpts = {
-            ignoreTLS: true
+            ignoreTLS: true,
+            debug: this.debug
     };
     if (this.auth) {
         mailOpts.auth = {};
         mailOpts.auth.user = this.username;
         mailOpts.auth.pass = this.password;
-        mailOpts.debug = this.debug;
     }
     if (this.ssl) {
         mailOpts.secureConnection = true;
     }
     smtpClient = getSmtpClient(this.port, this.host, mailOpts);
-    this.emit("debug", 'Smtp client created');
+    if (this.debug) {
+        this.emit("debug", 'Smtp client created');
+    }
 
     if (this.sendTimeout) {
         sendTimeoutTimer = vertx.setTimer(this.sendTimeout, function() {
             sendTimeoutTimer = undefined;
             // "close" triggers the emittance of the "end" event and destroys
             // the client
+            sendError = new Error('A-Mailer: Send timeout');
             smtpClient.close();
         });
     }
@@ -647,19 +650,21 @@ Mailer.prototype.sendSeq = function (sendData, callback) {
     }  else {
         // No current client in this._smtpClient => create a new one
         mailOpts = {
-                ignoreTLS: true
+                ignoreTLS: true,
+                debug: this.debug
         };
         if (this.auth) {
             mailOpts.auth = {};
             mailOpts.auth.user = this.username;
             mailOpts.auth.pass = this.password;
-            mailOpts.debug = this.debug;
         }
         if (this.ssl) {
             mailOpts.secureConnection = true;
         }
         smtpClient = getSmtpClient(this.port, this.host, mailOpts);
-        this.emit("debug", 'Smtp client created');
+        if (this.debug) {
+            this.emit("debug", 'Smtp client created');
+        }
         
         this._smtpClient = smtpClient;
         // Set the "_isIdle" flag initially to false, so that subsequent calls
@@ -791,18 +796,8 @@ Mailer.prototype.sendSeqEnd = function () {
 //available with roughly the same API
 if (container.config.address) {
     vertx.eventBus.registerHandler(container.config.address,
-    function (sendDataJSON, replier) {
-        var data;       // Parsed send message data
+    function (data, replier) {
         var mailer;     // mailer object to send the email with
-
-        try {
-            data = JSON.parse(sendDataJSON);
-        } catch (parseErr) {
-            replier(JSON.stringify({
-                errorMsg: 'JSON parse error: ' + parseErr.toString()
-            }));
-            return;
-        }
 
         if (data.method === 'sendSeq') {
             // ================
@@ -819,13 +814,13 @@ if (container.config.address) {
             }
             moduleScopeMailer.sendSeq(data, function (err, result) {
                 if (err) {
-                    replier(JSON.stringify({
+                    replier({
                         errorMsg: err.toString()
-                    }));
+                    });
                     moduleScopeMailer.removeAllListeners();
                     moduleScopeMailer = undefined;
                 } else {
-                    replier(JSON.stringify(result));
+                    replier(result);
                 }
             });
         } else if (data.method === 'sendSeqEnd') {
@@ -837,9 +832,9 @@ if (container.config.address) {
                 moduleScopeMailer.removeAllListeners();
                 moduleScopeMailer = undefined;
             }
-            replier(JSON.stringify({
+            replier({
                 response: 'OK'
-            }));            
+            });            
         } else if (!data.method || data.method === 'send') {
             // =============
             // Method: send
@@ -852,18 +847,18 @@ if (container.config.address) {
             }
             mailer.send(data, function (err, result) {
                 if (err) {
-                    replier(JSON.stringify({
+                    replier({
                         errorMsg: err.toString()
-                    }));
+                    });
                 } else {
-                    replier(JSON.stringify(result));
+                    replier(result);
                 }
                 mailer.removeAllListeners();
             });
         } else {
-            replier(JSON.stringify({
+            replier({
                 errorMsg: 'No such method: ' + data.method
-            }));            
+            });            
         }
     });
 }

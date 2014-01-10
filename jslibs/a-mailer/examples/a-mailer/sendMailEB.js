@@ -50,9 +50,7 @@ email.attachments.push({
 });
 
 // Send the email
-vertx.eventBus.send('mailer', JSON.stringify(email), function (replyJSON) {
-    var reply = JSON.parse(replyJSON);
-
+vertx.eventBus.send('mailer', email, function (reply) {
     if (reply.errorMsg) {
         console.log('ERROR SENDING MAIL: ' + reply.errorMsg);
     } else {
